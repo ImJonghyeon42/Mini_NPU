@@ -38,6 +38,8 @@ module top_controller(
 			count <= '0;
 			start_signal <= '0;
 			done_signal <= 0;
+			tx_data <= '0;
+			pixel_row_data <= '{default: '0};
 		end
 		else begin
 			start_signal <= '0;
