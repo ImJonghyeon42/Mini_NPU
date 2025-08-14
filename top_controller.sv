@@ -6,6 +6,7 @@ module top_controller(
 	input logic [7:0] rx_data,
 	input logic  rx_valid,
 	output logic  [7:0] tx_data,
+	output logic done_signal
 );
 
 	logic start_signal;
