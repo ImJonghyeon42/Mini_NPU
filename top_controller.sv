@@ -37,7 +37,7 @@ module top_controller(
 			state <= IDLE;
 			count <= '0;
 			start_signal <= '0;
-			done_signal <= 0;
+			done_signal <= '0;
 			tx_data <= '0;
 			pixel_row_data <= '{default: '0};
 		end
@@ -45,38 +45,43 @@ module top_controller(
 			start_signal <= '0;
 			done_signal <= 0;
 			case(state) 
-				IDLE : if(start) state <= RECEIVE_DATA;
+				IDLE : begin
+				    if(start) begin 
+				        state <= RECEIVE_DATA;
+				        count <= '0;
+				    end
+				end
 				RECEIVE_DATA : begin
 					if(rx_valid) begin
-						pixel_row_data[count] <= rx_data;
-						if(count == 31) begin
+						pixel_row_data[count[4:0]] <= rx_data;
+						if(count[4:0] == 5'd31) begin
 							state <= COMPUTE;
 							count <= '0;
 							start_signal <= '1;
 						end
-						else count <= count +'1;
+						else count <= count +6'd1;
 					end
 				end
 				COMPUTE : begin
 					if(conv_engine_done) begin
 						state <= FIND_MAX;
 						max_val_reg <= result_data[0];
-						count <= '1;
+						count <= 6'd1;
 					end
 				end
 				FIND_MAX : begin
-					if(max_val_reg >= result_data[count] ) max_val_reg <= max_val_reg;
-					else max_val_reg <= result_data[count];
+					if(max_val_reg >= result_data[count[4:0]] ) max_val_reg <= max_val_reg;
+					else max_val_reg <= result_data[count[4:0]];
 					
-					if(count == 29) begin
+					if(count[4:0] == 5'd29) begin
 						state <= SEND_RESULT;
 						count <= '0;
 					end
-					else count <= count + '1;
+					else count <= count + 6'd1;
 				end
 				SEND_RESULT: begin
 					tx_data <= max_val_reg[7:0];
-					done_signal <= 1;
+					done_signal <= 1'b1;
 					state <= IDLE;
 				end
 			endcase
