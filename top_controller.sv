@@ -43,6 +43,7 @@ module top_controller(
 		end
 		else begin
 			start_signal <= '0;
+			done_signal <= 0;
 			case(state) 
 				IDLE : if(start) state <= RECEIVE_DATA;
 				RECEIVE_DATA : begin
