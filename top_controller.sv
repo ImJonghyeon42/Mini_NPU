@@ -10,13 +10,13 @@ module top_controller(
 );
 
 	logic start_signal;
+	logic conv_engine_done;
 	logic signed [17:0] max_val_reg;
 	logic [5:0]  count;
 	logic signed [255:0] flattened_pixel_data;
 	logic [7:0] pixel_row_data [0:31];
 	logic signed [17:0] result_data [0:29];
 	
-	enum logic [2:0] {IDLE, RECEIVE_DATA, COMPUTE, FIND_MAX, SEND_RESULT, DONE} state;
 	
 	always_comb begin
 		for( int i=0;i<32;i++) flattened_pixel_data[i*8 +: 8] = pixel_row_data[i];
@@ -26,7 +26,6 @@ module top_controller(
 		.clk, .rst,
 		.start(start_signal),
 		.pixel_row_data(flattened_pixel_data),
-		.done_signal,
 		.result_data
 	);
 
@@ -54,7 +53,6 @@ module top_controller(
 					end
 				end
 				COMPUTE : begin
-					if(done_signal) begin
 						state <= FIND_MAX;
 						max_val_reg <= result_data[0];
 						count <= '1;
@@ -69,17 +67,6 @@ module top_controller(
 						count <= '0;
 					end
 					else count <= count + '1;
-			end
-			SEND_RESULT: begin
-				tx_data <= max_val_reg[7:0];
-				state <= DONE;
-			end
-			DONE: begin
-				done_signal <= 1;
-				state <= IDLE;
-			end
-		endcase
 	end
-end
 endmodule
 	
