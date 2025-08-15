@@ -70,8 +70,7 @@ module top_controller(
 					end
 				end
 				FIND_MAX : begin
-					if(max_val_reg >= result_data[count[4:0]] ) max_val_reg <= max_val_reg;
-					else max_val_reg <= result_data[count[4:0]];
+					if(result_data[count[4:0]] > max_val_reg) max_val_reg <= result_data[count[4:0]]; 
 					
 					if(count[4:0] == 5'd29) begin
 						state <= SEND_RESULT;
