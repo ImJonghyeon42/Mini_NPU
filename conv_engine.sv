@@ -3,14 +3,14 @@ module conv_engine(
 	input logic clk,
 	input logic rst,
 	input logic start,
-	input logic signed [255:0] pixel_row_data,
+	input logic [255:0] pixel_row_data,
 	output logic done_signal,
 	output logic signed [17:0] result_data [0:29]
 );
 	enum logic [1:0] {IDLE, LOAD, PROCESSING, DONE} state;
 	logic [5:0] count;
 
-	logic signed [7:0] pixel_window [0:31];
+	logic [7:0] pixel_window [0:31];
 	logic wea;
 	logic [7:0] dina;
 	logic signed [7:0] doutb;

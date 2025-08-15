@@ -13,7 +13,7 @@ module top_controller(
 	logic conv_engine_done;
 	logic signed [17:0] max_val_reg;
 	logic [5:0]  count;
-	logic signed [255:0] flattened_pixel_data;
+	logic [255:0] flattened_pixel_data;
 	logic [7:0] pixel_row_data [0:31];
 	logic signed [17:0] result_data [0:29];
 	
