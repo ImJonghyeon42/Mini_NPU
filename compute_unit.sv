@@ -12,7 +12,7 @@ module compute_unit (
         if (rst) begin
             sum_out <= '0;
         end else begin
-            sum_out <= pixel_a * weight_b + sum_in;
+            sum_out <= signed '(pixel_a) * weight_b + sum_in;
         end
     end
 endmodule

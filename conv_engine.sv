@@ -13,7 +13,7 @@ module conv_engine(
 	logic [7:0] pixel_window [0:31];
 	logic wea;
 	logic [7:0] dina;
-	logic signed [7:0] doutb;
+	logic [7:0] doutb;
 	logic [5:0] read_addr;
 	
 	logic signed [17:0] pipe1_out,pipe2_out,pipe3_out;
