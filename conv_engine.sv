@@ -75,7 +75,7 @@ module conv_engine(
 					
 					if(count[4:0] == 5'd31) begin
 						state <= PROCESSING;
-						count <= '0;
+						count <= 6'd0;
 						pixel_window <= '{default: '0};
 					end
 					else count <= count + 6'd1;
