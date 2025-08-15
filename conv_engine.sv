@@ -81,7 +81,6 @@ module conv_engine(
 					else count <= count + 6'd1;
 				end
 				PROCESSING : begin
-					result_data[count[4:0]] <= pipe3_out;
 					for(int i=0;i<31;i=i+1) pixel_window[i] <= pixel_window[i+1];
 					pixel_window[31] <= doutb;
 					
