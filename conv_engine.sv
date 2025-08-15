@@ -60,6 +60,7 @@ module conv_engine(
 			pixel_window <= '{default: '0};
 			result_data <= '{default: '0};
 		end else begin
+			done_signal <= '0;
 			wea <= '0;
 			case(state)
 				IDLE : begin
