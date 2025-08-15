@@ -14,6 +14,7 @@ module conv_engine(
 	logic wea;
 	logic [7:0] dina;
 	logic signed [7:0] doutb;
+	logic [5:0] read_addr;
 	
 	logic signed [17:0] pipe1_out,pipe2_out,pipe3_out;
 	logic signed [7:0] kernel [0:2] = '{-1,2,-1};
@@ -24,7 +25,7 @@ module conv_engine(
 		.addra(count[4:0]),
 		.dina,
 		.clkb(clk),
-		.addrb(count[4:0]),
+		.addrb(read_addr[4:0]),
 		.doutb
 	);
 	
@@ -57,6 +58,7 @@ module conv_engine(
 			done_signal <= '0;
 			dina <= '0;
 			wea <= '0;
+			read_addr <= '0;
 			pixel_window <= '{default: '0};
 			result_data <= '{default: '0};
 		end else begin
@@ -76,22 +78,25 @@ module conv_engine(
 					if(count[4:0] == 5'd31) begin
 						state <= PROCESSING;
 						count <= 6'd0;
+						read_addr <= 6'd0;
 						pixel_window <= '{default: '0};
 					end
 					else count <= count + 6'd1;
 				end
 				PROCESSING : begin
-					if(count <= 6'd2) begin
-						pixel_window[count[4:0]] <= doutb;
-					end else begin
-						for(int i=0;i<31;i=i+1) pixel_window[i] <= pixel_window[i+1];
-						pixel_window[31] <= doutb;
+					if(read_addr < 6'd31) begin
+						read_addr <= read_addr + 6'd1;
+					end 
 					
-						if(count >= 6'd5) begin // 파이프라인이 다 채워진 후 (2클럭 지연) 부터 결과 저장
-							result_data[count[4:0] - 6'd5] <= pipe3_out;
+					for(int i=0;i<31;i=i+1) pixel_window[i] <= pixel_window[i+1];
+					pixel_window[31] <= doutb;
+					
+					if(count >= 6'd5) begin // 파이프라인이 다 채워진 후 (2클럭 지연) 부터 결과 저장
+						if((count - 6'd5) < 30) begin
+							result_data[count - 6'd5] <= pipe3_out;
 						end
 					end
-					if(count[4:0] == 5'd31) state <= DONE;
+					if(count >= 6'd34) state <= DONE;
 					else count <= count + 6'd1;
 				end
 				DONE: begin
