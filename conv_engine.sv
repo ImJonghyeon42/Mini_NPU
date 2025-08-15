@@ -60,37 +60,37 @@ module conv_engine(
 			pixel_window <= '{default: '0};
 			result_data <= '{default: '0};
 		end else begin
-			done_signal <= '0;
+		    done_signal <= '0;
 			wea <= '0;
 			case(state)
 				IDLE : begin
 					if(start) begin
 						state <= LOAD;
-						count <= '0;
+						count <= 6'd0;
 					end
 				end
 				LOAD: begin
 					wea <= 1'b1;
 					dina <= pixel_row_data[count[4:0]*8 +: 8];
 					
-					if(count == 31) begin
+					if(count[4:0] == 5'd31) begin
 						state <= PROCESSING;
 						count <= '0;
 						pixel_window <= '{default: '0};
 					end
-					else count <= count + '1;
+					else count <= count + 6'd1;
 				end
 				PROCESSING : begin
-					result_data[count] <= pipe3_out;
+					result_data[count[4:0]] <= pipe3_out;
 					for(int i=0;i<31;i=i+1) pixel_window[i] <= pixel_window[i+1];
 					pixel_window[31] <= doutb;
 					
 					if(count >= 2) begin // 파이프라인이 다 채워진 후 (2클럭 지연) 부터 결과 저장
-						result_data[count -2] <= pipe3_out;
+						result_data[count[4:0] -2] <= pipe3_out;
 					end
 					
-					if(count == 31) state <= DONE;
-					else count <= count + '1;
+					if(count[4:0] == 5'd31) state <= DONE;
+					else count <= count + 6'd1;
 				end
 				DONE: begin
 					done_signal <= 1'b1;
