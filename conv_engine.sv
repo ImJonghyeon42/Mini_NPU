@@ -88,15 +88,15 @@ module conv_engine(
 						read_addr <= read_addr + 6'd1;
 					end 
 					
-					for(int i=0;i<31;i=i+1) pixel_window[i] <= pixel_window[i+1];
-					pixel_window[31] <= doutb;
+					for(int i=31;i>0;i--) pixel_window[i] <= pixel_window[i-1];
+					pixel_window[0] <= doutb;
 					
-					if(count >= 6'd5) begin // 파이프라인이 다 채워진 후 (2클럭 지연) 부터 결과 저장
-						if((count - 6'd5) < 30) begin
-							result_data[count - 6'd5] <= pipe3_out;
+					if(count >= 6'd3) begin // 윈도우가 채워진 후
+						if((count - 6'd3) < 30) begin
+							result_data[count - 6'd3] <= pipe3_out;
 						end
 					end
-					if(count >= 6'd34) state <= DONE;
+					if(count >= 6'd32) state <= DONE;
 					else count <= count + 6'd1;
 				end
 				DONE: begin
