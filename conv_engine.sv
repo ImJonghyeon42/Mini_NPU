@@ -84,8 +84,8 @@ module conv_engine(
 					for(int i=0;i<31;i=i+1) pixel_window[i] <= pixel_window[i+1];
 					pixel_window[31] <= doutb;
 					
-					if(count >= 2) begin // 파이프라인이 다 채워진 후 (2클럭 지연) 부터 결과 저장
-						result_data[count[4:0] -2] <= pipe3_out;
+					if(count >= 6'd2) begin // 파이프라인이 다 채워진 후 (2클럭 지연) 부터 결과 저장
+						result_data[count[4:0] - 6'd2] <= pipe3_out;
 					end
 					
 					if(count[4:0] == 5'd31) state <= DONE;
