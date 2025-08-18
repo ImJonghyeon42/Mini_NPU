@@ -12,7 +12,7 @@ module compute_unit (
 			sum_out <= '0;
 		end else begin
 			
-			sum_out <= signed'(pixel_a) * weight_b + sum_in;
+			sum_out <= signed'({1'b0, pixel_a}) * signed'(weight_b) + sum_in;
 		end
 	end
 endmodule
