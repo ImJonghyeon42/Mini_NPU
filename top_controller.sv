@@ -6,7 +6,7 @@ module top_controller(
 	input logic [7:0] rx_data,
 	input logic  rx_valid,
 	output logic [7:0] tx_data, // 차선 중심 위치 (0~29)
-	output logic [7:0] confidence, //신뢰도 (최대값 크기)
+	output logic [7:0] confidence, //신뢰도 (두 차선의 평균 선명도)
 	output logic done_signal
 );
 
@@ -19,7 +19,11 @@ module top_controller(
 	logic [7:0] pixel_row_data [0:31];
 	logic signed [17:0] result_data [0:29];
 	
-	enum logic [2:0] {IDLE, RECEIVE_DATA, COMPUTE, FIND_MAX, SEND_RESULT} state;
+	parameter signed [17:0] THRESHOLD = 100;// 차선으로 인식할 최소 선명도 (노이즈 제거용)
+	logic [7:0] peak1_pos, peak2_pos;
+	logic signed [17:0] peak1_val, peak2_val;
+	
+	enum logic [3:0] {IDLE, RECEIVE_DATA, COMPUTE, FIND_LANES, CALC_CENTER, SEND_RESULT} state;
 	
 	always_comb begin
 		for( int i=0;i<32;i++) flattened_pixel_data[i*8 +: 8] = pixel_row_data[i];
@@ -43,6 +47,9 @@ module top_controller(
 			tx_data <= '0;
 			pixel_row_data <= '{default: '0};
 			confidence <= '0;
+			peak1_pos <= '0;
+			peak2_pos <= '0;
+			peak1_val <= '0; peak2_val; <= '0;
 		end
 		else begin
 			start_signal <= '0;
@@ -67,31 +74,49 @@ module top_controller(
 				end
 				COMPUTE : begin
 					if(conv_engine_done) begin
-						state <= FIND_MAX;
-						max_val_reg <= result_data[0];
-						count <= 6'd1;
+						state <= FIND_LANES;
+						max_val_reg <= '0;
+						peak1_val <= '0; peak2_val; <= '0;
+						peak1_pos <= '0;
+						peak2_pos <= '0;
+						count <= 6'd0; // 6'd1 -> 6'd0
 					end
 				end
 				FIND_MAX : begin
-					if(result_data[count[4:0]] > max_val_reg) begin
-					    max_val_reg <= result_data[count[4:0]];
-					    max_position_reg <= count[4:0];
-					end else if((-result_data[count[4:0]])> max_val_reg) begin
-					   max_val_reg <= -result_data[count[4:0]];
-					   max_position_reg <= count[4:0];
-					end
-					    					
-					if(count[4:0] == 5'd29) begin
-						state <= SEND_RESULT;
-						count <= '0;
-					end
-					else count <= count + 6'd1;
-				end
-				SEND_RESULT: begin
-					tx_data <= max_position_reg;
-					if(max_val_reg > 255) confidence <= 8'd255;
-					else confidence <= max_val_reg[7:0];
+					logic signed [17:0] current_val = (result_data[count[4:0]] < 0) ? -result_data[count[4:0]] : result_data[count[4:0]];
 					
+					if(current_val > THRESHOLD) begin
+						if(count[4:0] < 15) begin
+							if(current_val > peak1_val) begin
+								peak1_val <= current_val;
+								peak1_pos <= count[4:0];
+							end
+						end
+						else begin
+							if(current_val > peak2_val) begin
+								peak2_val <= current_val;
+								peak2_pos <= count[4:0];
+							end
+						end
+					end
+					if(count[4:0] == 5'd29) begin
+						state <= CALC_CENTER;
+					end
+					else begin
+						count <= count + 6'd1;
+					end
+					
+				CALC_CENTER: begin
+					if(peak1_val > THRESHOLD && peak2_val > THRESHOLD) begin
+						tx_data <= (peak1_pos + peak2_pos) >> 1; //나누기 2
+						confidence <= ((peak1_val >> 1) + (peak2_val >> 1)[7:0];				
+					end else begin
+						tx_data <= 8'd0;
+						confidence <= 8'd0;
+					end
+						state <= SEND_RESULT;		
+				end
+				SEND_RESULT: begin					
 					done_signal <= 1'b1;
 					state <= IDLE;
 				end
