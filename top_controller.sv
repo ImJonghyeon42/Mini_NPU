@@ -5,21 +5,19 @@ module top_controller(
 	input logic start,
 	input logic [7:0] rx_data,
 	input logic  rx_valid,
-	output logic [7:0] tx_data, // ì°¨ì„  ì¤‘ì‹¬ ìœ„ì¹˜ (0~29)
-	output logic [7:0] confidence, //ì‹ ë¢°ë„ (ë‘ ì°¨ì„ ì˜ í‰ê·  ì„ ëª…ë„)
+	output logic [7:0] tx_data, // Â÷¼± Áß½É À§Ä¡ (0~29)
+	output logic [7:0] confidence, //½Å·Úµµ (µÎ Â÷¼±ÀÇ Æò±Õ ¼±¸íµµ)
 	output logic done_signal
 );
 
 	logic start_signal;
 	logic conv_engine_done;
-	logic signed [17:0] max_val_reg;
-	logic [7:0] max_position_reg;
 	logic [5:0]  count;
 	logic [255:0] flattened_pixel_data;
 	logic [7:0] pixel_row_data [0:31];
 	logic signed [17:0] result_data [0:29];
 	
-	parameter signed [17:0] THRESHOLD = 100;// ì°¨ì„ ìœ¼ë¡œ ì¸ì‹í•  ìµœì†Œ ì„ ëª…ë„ (ë…¸ì´ì¦ˆ ì œê±°ìš©)
+	parameter signed [17:0] THRESHOLD = 100;// Â÷¼±À¸·Î ÀÎ½ÄÇÒ ÃÖ¼Ò ¼±¸íµµ (³ëÀÌÁî Á¦°Å¿ë)
 	localparam MAX_PEAKS = 4;
 	
 	logic [7:0] peak_positions [0:MAX_PEAKS -1];
@@ -32,8 +30,6 @@ module top_controller(
 	logic [7:0] last_center_pos;
 	
 	enum logic [3:0] {IDLE, RECEIVE_DATA, COMPUTE, FIND_LANES, SELECT_PAIR, CALC_CENTER, SEND_RESULT} state;
-	
-	logic [2:0] i, j;
 	
 	always_comb begin
 		for( int i=0;i<32;i++) flattened_pixel_data[i*8 +: 8] = pixel_row_data[i];
@@ -49,7 +45,6 @@ module top_controller(
 
 	always_ff@(posedge clk) begin
 		if(rst) begin
-			max_val_reg <= '0;
 			state <= IDLE;
 			count <= '0;
 			start_signal <= '0;
@@ -59,6 +54,10 @@ module top_controller(
 			confidence <= '0;
 			last_center_pos <= 15;
 			peak_count <= '0;
+			peak_positions <= '{default : '0};
+			peak_values <= '{default : '0};
+	        best_peak1_pos <= '0; best_peak2_pos <= '0;
+	        best_peak1_val <= '0; best_peak2_val <= '0;			
 		end
 		else begin
 			start_signal <= '0;
@@ -84,13 +83,12 @@ module top_controller(
 				COMPUTE : begin
 					if(conv_engine_done) begin
 						state <= FIND_LANES;
-						max_val_reg <= '0;
 						peak_count <= '0;
 						for(int k=0; k<MAX_PEAKS; k++) begin
 							peak_positions[k] <= '0;
 							peak_values[k] <= '0;						
 						end
-						count <= 6'd0; // 6'd1 -> 6'd0
+						count <= 6'd0; 
 					end
 				end
 				FIND_LANES : begin
@@ -135,7 +133,7 @@ module top_controller(
 						
 				CALC_CENTER: begin
 					if(best_peak1_pos != '0) begin
-						tx_data <= (best_peak1_pos + best_peak2_pos) >> 1; //ë‚˜ëˆ„ê¸° 2
+						tx_data <= (best_peak1_pos + best_peak2_pos) >> 1; //³ª´©±â 2
 						confidence <= ((best_peak1_val >> 1) + (best_peak2_val >> 1));		
 					end else begin
 						tx_data <= last_center_pos;
