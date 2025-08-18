@@ -27,7 +27,7 @@ module top_controller(
 	logic [$clog2(MAX_PEAKS+1) : 0] peak_count;
 	
 	logic [7:0] best_peak1_pos, best_peak2_pos;
-	logic [7:0] best_peak1_val, best_peak2_val;
+	logic signed [7:0] best_peak1_val, best_peak2_val;
 	
 	logic [7:0] last_center_pos;
 	
@@ -108,6 +108,7 @@ module top_controller(
 					else begin
 						count <= count + 6'd1;
 					end
+				end
 				SELECT_PAIR : begin
 					logic [7:0] min_diff = 255;
 					best_peak1_pos <= 0; best_peak2_pos <= 0;
@@ -135,7 +136,7 @@ module top_controller(
 				CALC_CENTER: begin
 					if(best_peak1_pos != '0) begin
 						tx_data <= (best_peak1_pos + best_peak2_pos) >> 1; //나누기 2
-						confidence <= ((best_peak1_val >> 1) + (best_peak2_val >> 1)[7:0];		
+						confidence <= ((best_peak1_val >> 1) + (best_peak2_val >> 1));		
 					end else begin
 						tx_data <= last_center_pos;
 						confidence <= 8'd0;
