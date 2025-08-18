@@ -5,15 +5,17 @@ module top_controller(
 	input logic start,
 	input logic [7:0] rx_data,
 	input logic  rx_valid,
-	output logic  [7:0] tx_data,
+	output logic [7:0] tx_data, // 차선 중심 위치 (0~29)
+	output logic [7:0] confidence, //신뢰도 (최대값 크기)
 	output logic done_signal
 );
 
 	logic start_signal;
 	logic conv_engine_done;
 	logic signed [17:0] max_val_reg;
+	logic [7:0] max_position_reg;
 	logic [5:0]  count;
-	logic signed [255:0] flattened_pixel_data;
+	logic [255:0] flattened_pixel_data;
 	logic [7:0] pixel_row_data [0:31];
 	logic signed [17:0] result_data [0:29];
 	
@@ -40,6 +42,7 @@ module top_controller(
 			done_signal <= '0;
 			tx_data <= '0;
 			pixel_row_data <= '{default: '0};
+			confidence <= '0;
 		end
 		else begin
 			start_signal <= '0;
@@ -70,9 +73,14 @@ module top_controller(
 					end
 				end
 				FIND_MAX : begin
-					if(max_val_reg >= result_data[count[4:0]] ) max_val_reg <= max_val_reg;
-					else max_val_reg <= result_data[count[4:0]];
-					
+					if(result_data[count[4:0]] > max_val_reg) begin
+					    max_val_reg <= result_data[count[4:0]];
+					    max_position_reg <= count[4:0];
+					end else if((-result_data[count[4:0]])> max_val_reg) begin
+					   max_val_reg <= -result_data[count[4:0]];
+					   max_position_reg <= count[4:0];
+					end
+					    					
 					if(count[4:0] == 5'd29) begin
 						state <= SEND_RESULT;
 						count <= '0;
@@ -80,7 +88,10 @@ module top_controller(
 					else count <= count + 6'd1;
 				end
 				SEND_RESULT: begin
-					tx_data <= max_val_reg[7:0];
+					tx_data <= max_position_reg;
+					if(max_val_reg > 255) confidence <= 8'd255;
+					else confidence <= max_val_reg[7:0];
+					
 					done_signal <= 1'b1;
 					state <= IDLE;
 				end
