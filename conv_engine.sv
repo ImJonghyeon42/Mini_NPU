@@ -107,7 +107,7 @@ module conv_engine(
 							else pixel_window[2] <= 8'd0;
 						end
 						
-						// 결과 저장 (1클록 지연 고려)
+						// 결과 저장 (3클록 파이프라인 지연 고려)
 						if(count >= 3) begin
 							result_data[count-3] <= pipe3_out;
 						end
