@@ -12,9 +12,24 @@ module conv_engine(
 	logic [7:0] memory_data [0:31];  // 메모리 대신 배열 사용
 	logic [7:0] pixel_window [0:2];   // 3개 원소만 필요
 	
+	logic [7:0] pixel_reg1 [0:2];
+	logic [7:0] pixel_reg2 [0:2];
+	
 	logic signed [17:0] pipe1_out,pipe2_out,pipe3_out;
 	logic signed [7:0] kernel [0:2] = '{-1,2,-1};
 	
+	
+	always_ff@(posedge clk) begin
+	   if(rst) begin
+	      pixel_reg1 <= '{default: '0};
+		  pixel_reg2 <= '{default: '0};
+	   end
+	   else begin
+		  pixel_reg1 <= pixel_window;
+		  pixel_reg2 <= pixel_reg1;
+	   end
+	end
+	      
 	compute_unit U0(
 		.clk,.rst,
 		.pixel_a(pixel_window[0]),
@@ -24,14 +39,14 @@ module conv_engine(
 	);
 	compute_unit U1(
 		.clk,.rst,
-		.pixel_a(pixel_window[1]),
+		.pixel_a(pixel_reg1[1]),
 		.weight_b(kernel[1]),
 		.sum_in(pipe1_out),
 		.sum_out(pipe2_out)
 	);
 	compute_unit U2(
 		.clk,.rst,
-		.pixel_a(pixel_window[2]),
+		.pixel_a(pixel_reg2[2]),
 		.weight_b(kernel[2]),
 		.sum_in(pipe2_out),
 		.sum_out(pipe3_out)
@@ -45,7 +60,8 @@ module conv_engine(
 			pixel_window <= '{default: '0};
 			result_data <= '{default: '0};
 			memory_data <= '{default: '0};
-		end else begin
+			
+		end else begin		
 		    done_signal <= '0;
 			case(state)
 				IDLE : begin
@@ -92,15 +108,21 @@ module conv_engine(
 						end
 						
 						// 결과 저장 (1클록 지연 고려)
-						if(count >= 1) begin
-							result_data[count-1] <= pipe3_out;
+						if(count >= 3) begin
+							result_data[count-3] <= pipe3_out;
 						end
 						
 						count <= count + 6'd1;
 					end else begin
 						// 마지막 결과 저장
-						result_data[29] <= pipe3_out;
-						state <= DONE;
+						if(count >= 3 && (count-3) < 30) begin
+						  result_data[count-3] <= pipe3_out;
+						end
+						if(count >= 32) begin
+						  state <= DONE;
+						end else begin
+						  count <= count + 6'd1;
+						end											
 					end
 				end
 				DONE: begin
