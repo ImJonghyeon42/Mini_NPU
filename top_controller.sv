@@ -92,10 +92,10 @@ module top_controller(
 					end
 				end
 				FIND_LANES : begin
-					logic signed [17:0] current_val = (result_data[count] < 0) ? -result_data[count] : result_data[count];
+					logic signed [17:0] current_val = (result_data[count[4:0]] < 0) ? -result_data[count[4:0]] : result_data[count[4:0]];
 					
 					if(current_val > THRESHOLD && peak_count < MAX_PEAKS) begin
-						peak_positions[peak_count] <= count;
+						peak_positions[peak_count] <= count[4:0];
 						peak_values[peak_count] <= current_val;
 						peak_count <= peak_count + 1'b1;					
 					end
