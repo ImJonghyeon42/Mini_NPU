@@ -25,12 +25,12 @@ module top_controller(
 	logic [$clog2(MAX_PEAKS+1) : 0] peak_count;
 	
 	logic [7:0] best_peak1_pos, best_peak2_pos;
-	logic signed [7:0] best_peak1_val, best_peak2_val;
+	logic signed [17:0] best_peak1_val, best_peak2_val;
 	
 	logic [7:0] last_center_pos;
 	
 	logic [7:0] min_diff_reg;
-	logic [3:0] p1_reg, p2_reg;
+	logic [2:0] p1_reg, p2_reg;  // 3비트면 충분 (0~7)
 	
 	enum logic [3:0] {IDLE, RECEIVE_DATA, COMPUTE, FIND_LANES, SELECT_PAIR, CALC_CENTER, SEND_RESULT} state;
 	
@@ -66,7 +66,7 @@ module top_controller(
 		end
 		else begin
 			start_signal <= '0;
-			done_signal <= 0;
+			done_signal <= 1'b0;
 			case(state) 
 				IDLE : begin
 				    if(start) begin 
@@ -80,9 +80,9 @@ module top_controller(
 						if(count[4:0] == 5'd31) begin
 							state <= COMPUTE;
 							count <= '0;
-							start_signal <= '1;
+							start_signal <= 1'b1;
 						end
-						else count <= count +6'd1;
+						else count <= count + 6'd1;
 					end
 				end
 				COMPUTE : begin
@@ -98,18 +98,19 @@ module top_controller(
 				end
 				FIND_LANES : begin
 					if(count[4:0] < 30) begin
+						// THRESHOLD 체크 및 피크 저장
 						if(((result_data[count[4:0]] < 0) ? -result_data[count[4:0]] : result_data[count[4:0]]) > THRESHOLD && peak_count < MAX_PEAKS) begin
 							peak_positions[peak_count] <= count[4:0];
 							peak_values[peak_count] <= (result_data[count[4:0]] < 0) ? -result_data[count[4:0]] : result_data[count[4:0]];
 							peak_count <= peak_count + 1'b1;
 						end
-					count <= count + 6'd1;
+						count <= count + 6'd1;
 					end else begin
+						// SELECT_PAIR 초기화
 						state <= SELECT_PAIR;
 						min_diff_reg <= 8'd255;
-						p1_reg <= '0;
-						p2_reg <= '0;
-						//count <= '0;
+						p1_reg <= 3'd0;
+						p2_reg <= 3'd1;  // p2는 항상 p1+1부터 시작
 						best_peak1_pos <= '0;
 						best_peak2_pos <= '0;
 						best_peak1_val <= '0;
@@ -117,48 +118,59 @@ module top_controller(
 					end	
 				end
 				SELECT_PAIR : begin
+					// 피크가 2개 이상 있어야 쌍 생성 가능
 					if(peak_count >= 2) begin
-						if(p2_reg < peak_count) begin
-							if(p1_reg < p2_reg && peak_positions[p1_reg] != '0 && peak_positions[p2_reg] != '0) begin
-							
-								if(((peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1) > last_center_pos) begin
-									if((((peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1) - last_center_pos) < min_diff_reg) begin
-										min_diff_reg = last_center_pos - ((peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1);
-										best_peak1_pos <= peak_positions[p1_reg];
-										best_peak2_pos <= peak_positions[p2_reg];
-										best_peak1_val <= peak_values[p1_reg];
-										best_peak2_val <= peak_values[p2_reg];
-									end
-								end else begin
-									if((last_center_pos - ((peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1)) < min_diff_reg) begin
-										min_diff_reg <= (last_center_pos - ((peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1));
-										best_peak1_pos <= peak_positions[p1_reg];
-										best_peak2_pos <= peak_positions[p2_reg];
-										best_peak1_val <= peak_values[p1_reg];
-										best_peak2_val <= peak_values[p2_reg];
-									end
+						// p1이 유효 범위 내에 있는지 확인
+						if(p1_reg < peak_count - 1) begin
+							// p2가 유효 범위 내에 있는지 확인
+							if(p2_reg < peak_count) begin
+								// 현재 조합 (p1_reg, p2_reg) 검사
+								// peak_positions가 0이 아닌지는 이미 FIND_LANES에서 보장됨
+								
+								// 중심 위치 계산
+								logic [7:0] current_center;
+								logic [7:0] diff;
+								current_center = (peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1;
+								diff <= (current_center > last_center_pos) ? 
+								       (current_center - last_center_pos) : 
+								       (last_center_pos - current_center);
+								
+								// 최소 차이 업데이트
+								if(diff < min_diff_reg) begin
+									min_diff_reg <= diff;
+									best_peak1_pos <= peak_positions[p1_reg];
+									best_peak2_pos <= peak_positions[p2_reg];
+									best_peak1_val <= peak_values[p1_reg];
+									best_peak2_val <= peak_values[p2_reg];
 								end
+								
+								// p2를 다음으로 증가 (무조건 실행!)
+								p2_reg <= p2_reg + 1;
+								
+							end else begin
+								// p2 루프 완료 → p1 증가, p2 초기화
+								p1_reg <= p1_reg + 1;
+								p2_reg <= p1_reg + 2;  // 새로운 p1에 대해 p2 = (p1+1) + 1
 							end
-						end
-						if(p2_reg == peak_count - 1) begin
-							p1_reg <= p1_reg + 1;
-							p2_reg <= p2_reg + 2;
 						end else begin
+							// 모든 조합 검사 완료
 							state <= CALC_CENTER;
-						end 
-					end  else begin
+						end
+					end else begin
+						// 피크 부족 → 바로 CALC_CENTER로
 						state <= CALC_CENTER;
 					end
 				end								
 				CALC_CENTER: begin
 					if(best_peak1_pos != '0 && best_peak2_pos != '0) begin
-						tx_data <= (best_peak1_pos + best_peak2_pos) >> 1; //나누기 2
-						confidence <= ((best_peak1_val > 255) ? 8'd127 : (best_peak1_val[7:0] >> 1) ) + (( best_peak2_val > 255) ? 8'd127 : (best_peak2_val[7:0] >> 1));
+						tx_data <= (best_peak1_pos + best_peak2_pos) >> 1;
+						confidence <= ((best_peak1_val > 255) ? 8'd127 : (best_peak1_val[7:0] >> 1)) + 
+						              ((best_peak2_val > 255) ? 8'd127 : (best_peak2_val[7:0] >> 1));
 					end else begin
 						tx_data <= last_center_pos;
 						confidence <= 8'd0;
 					end
-						state <= SEND_RESULT;		
+					state <= SEND_RESULT;		
 				end
 				SEND_RESULT: begin					
 					done_signal <= 1'b1;
@@ -169,4 +181,3 @@ module top_controller(
 		end
 	end
 endmodule
-	
