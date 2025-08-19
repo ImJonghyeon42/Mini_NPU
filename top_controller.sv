@@ -130,7 +130,7 @@ module top_controller(
 								// 중심 위치 계산
 								logic [7:0] current_center;
 								logic [7:0] diff;
-								current_center = (peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1;
+								current_center <= (peak_positions[p1_reg] + peak_positions[p2_reg]) >> 1;
 								diff <= (current_center > last_center_pos) ? 
 								       (current_center - last_center_pos) : 
 								       (last_center_pos - current_center);

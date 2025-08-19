@@ -59,6 +59,16 @@ module tb_top_controller;
             $display("Confidence: %d", confidence);
             $display("--------------------------------------------------");
         end
+		
+		$display("Result data: ");
+	for(int i=0; i<30; i++) begin
+		$display("Position %d: %d", i, $signed(dut.result_data[i]));
+	end
+		$display("Detected peaks: %d", dut.peak_count);
+	for(int i=0; i<dut.peak_count; i++) begin
+		$display("Peak %d: Position=%d, Value=%d", i, dut.peak_positions[i], dut.peak_values[i]);
+	end
+
     endtask
 
     // --- 메인 테스트 시나리오 ---
