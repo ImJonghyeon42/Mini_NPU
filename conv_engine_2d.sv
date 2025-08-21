@@ -20,10 +20,6 @@ module conv_engine_2d(
 	logic	[7:0]	line_buffer2	[0:IMG_WIDTH - 1];
 	
 	logic	[7:0]	pixel_window	[0 : KERNEL_SIZE - 1][0 : KERNEL_SIZE - 1];
-	logic	[7:0]	win_col0	[0		:	KERNEL_SIZE - 1];
-	logic	[7:0]	win_col1	[0		:	KERNEL_SIZE - 1];
-	logic	[7:0]	win_col2	[0		:	KERNEL_SIZE - 1];
-	
 	logic	signed	[7:0]	kernel	[0 : KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1]	=	'{{1, 0, -1},
 																																{2, 0, -2},
 																																{1, 0, -1}};
@@ -60,6 +56,7 @@ module conv_engine_2d(
 			win_col2 <= '{default: '0};
 			line_buffer1 <= '{default: '0};
 			line_buffer2 <= '{default: '0};
+			pixel_window <= '{default: '0};
 		end
 		else if(pixel_valid) begin
 			line_buffer2	<=	line_buffer1;
@@ -68,21 +65,17 @@ module conv_engine_2d(
 			for(int i = 1; i < IMG_WIDTH; i = i + 1) begin 
 				line_buffer1[i]	<=	line_buffer1[i - 1];					
 			end
-				
-			win_col2[0] <=	pixel_in;
-			win_col2[1]	<=	win_col2[0];
-			win_col2[2]	<=	win_col2[1];
-					
-			win_col1[0] <=	line_buffer1[0];
-			win_col1[1]	<=	win_col1[0];
-			win_col1[2]	<=	win_col1[1];
-					
-			win_col0[0] <=	line_buffer2[0];
-			win_col0[1]	<=	win_col0[0];
-			win_col0[2]	<=	win_col0[1];
+			for(int i = 0;  i < KERNEL_SIZE - 1; i++) begin
+				pixel_window[0][i] <= pixel_window[0][i+1];
+				pixel_window[1][i] <= pixel_window[1][i+1];
+				pixel_window[2][i] <= pixel_window[2][i+1];
+			end
+			pixel_window[0][2] <= line_buffer2[0];		
+			pixel_window[1][2] <= line_buffer1[0];		
+			pixel_window[2][2] <= pixel_in;		
 		end
 	end
-	
+		
 	always_ff@(posedge clk) begin
 			if(rst) begin
 				sum_stage1	<=	'{default: '0} ;
@@ -99,12 +92,6 @@ module conv_engine_2d(
 					
 				final_result	<=	sum_stage2[0] + sum_stage2[1] + mac_out[2] [2];
 			end
-	end
-	
-	always_comb begin
-		pixel_window[0] = win_col0;
-		pixel_window[1] = win_col1;
-		pixel_window[2] = win_col2;
 	end
 	
 	always_ff@(posedge clk) begin
