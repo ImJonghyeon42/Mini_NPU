@@ -37,7 +37,7 @@ module conv_engine_2d(
 	logic	[$clog2(IMG_WIDTH) - 1 : 0]	cnt_x;
 	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
 	
-	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4;
+	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4,valid_d5;
 	
 	enum	logic	[1:0]	{IDLE, PROCESSING, DONE} state, next_state;
 	
@@ -63,20 +63,17 @@ module conv_engine_2d(
 			pixel_window <= '{default: '0};
 		end
 		else if(pixel_valid) begin
-			line_buffer2	<=	line_buffer1;
-				
-			line_buffer1[0]	<=	pixel_in;
-			for(int i = 1; i < IMG_WIDTH; i = i + 1) begin 
-				line_buffer1[i]	<=	line_buffer1[i - 1];					
+			line_buffer2[cnt_x]	<=	line_buffer1[cnt_x];	
+			line_buffer1[cnt_x]	<=	pixel_in;
+			
+			for(int i = 0; i < KERNEL_SIZE; i = i + 1) begin 
+				pixel_window[i][0]	<=	pixel_window[i][1];					
+				pixel_window[i][1]	<=	pixel_window[i][2];					
 			end
-			for(int i = 0;  i < KERNEL_SIZE - 1; i++) begin
-				pixel_window[0][i] <= pixel_window[0][i+1];
-				pixel_window[1][i] <= pixel_window[1][i+1];
-				pixel_window[2][i] <= pixel_window[2][i+1];
-			end
-			pixel_window[0][2] <= line_buffer2[0];		
-			pixel_window[1][2] <= line_buffer1[0];		
-			pixel_window[2][2] <= pixel_in;		
+
+			pixel_window[2][2] <= pixel_in;				
+			pixel_window[1][2] <= line_buffer1[cnt_x];		
+			pixel_window[0][2] <= line_buffer2[cnt_x];	
 		end
 	end
 		
@@ -151,7 +148,8 @@ module conv_engine_2d(
             valid_d2 <= valid_d1;
             valid_d3 <= valid_d2;
 			valid_d4 <= valid_d3;
-            result_valid <= valid_d4; // 5 사이클 지연된 valid 신호
+			valid_d5 <= valid_d4;
+            result_valid <= valid_d5; // 6 사이클 지연된 valid 신호
         end
     end
 	
