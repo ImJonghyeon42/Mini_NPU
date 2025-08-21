@@ -33,7 +33,7 @@ module conv_engine_2d(
 	logic	[$clog2(IMG_WIDTH) - 1 : 0]	cnt_x;
 	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
 	
-	logic	valid_in,valid_d1,valid_d2,valid_d3;
+	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4;
 	
 	enum	logic	[1:0]	{IDLE, PROCESSING, DONE} state, next_state;
 	
@@ -134,12 +134,14 @@ module conv_engine_2d(
             valid_d1 <= 1'b0;
             valid_d2 <= 1'b0;
             valid_d3 <= 1'b0;
+            valid_d4 <= 1'b0;
             result_valid <= 1'b0; // 최종 출력 valid
         end else begin
             valid_d1 <= valid_in;
             valid_d2 <= valid_d1;
             valid_d3 <= valid_d2;
-            result_valid <= valid_d3; // 4 사이클 지연된 valid 신호
+			valid_d4 <= valid_d3;
+            result_valid <= valid_d4; // 5 사이클 지연된 valid 신호
         end
     end
 	
