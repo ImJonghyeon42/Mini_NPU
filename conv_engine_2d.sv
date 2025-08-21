@@ -81,7 +81,7 @@ module conv_engine_2d(
 			if(rst) begin
 				sum_stage1	<=	'{default: '0} ;
 				sum_stage2	<=	'{default: '0} ;
-				sum_stage3	<=	'{default: '0} ;
+				sum_stage3	<=	'0;
 				
 				mac_2_2_d1 <= '0;
 				mac_2_2_d2 <= '0;
@@ -142,6 +142,7 @@ module conv_engine_2d(
             valid_d2 <= 1'b0;
             valid_d3 <= 1'b0;
             valid_d4 <= 1'b0;
+            valid_d5 <= 1'b0;
             result_valid <= 1'b0; // 최종 출력 valid
         end else begin
             valid_d1 <= valid_in;

@@ -25,8 +25,9 @@ module conv_engine_tb;
     // 결과 수집
     always @(posedge clk) begin
         if (result_valid) begin
-            actual_results[result_row][result_col] = result_out;
-            $display("결과 [%2d,%2d]: %d", result_row, result_col, result_out);
+            if (result_row < 30 && result_col < 30) begin
+                actual_results[result_row][result_col] = result_out;
+            end
             
             result_col++;
             if (result_col >= 30) begin
@@ -44,9 +45,9 @@ module conv_engine_tb;
             for (int y = 0; y < 32; y++) begin
                 for (int x = 0; x < 32; x++) begin
                     if (x < 16)
-                        input_image[y][x] = 8'd0;    // 왼쪽은 검은색
+                        input_image[y][x] = 8'd0;
                     else
-                        input_image[y][x] = 8'd255;  // 오른쪽은 흰색
+                        input_image[y][x] = 8'd255;
                 end
             end
         end
@@ -58,7 +59,6 @@ module conv_engine_tb;
             $display("수직 에지 예상 결과 계산 중...");
             for (int y = 1; y < 31; y++) begin
                 for (int x = 1; x < 31; x++) begin
-                    // Sobel X 커널 적용
                     expected_result[y-1][x-1] = 
                         1 * input_image[y-1][x-1] + 0 * input_image[y-1][x] - 1 * input_image[y-1][x+1] +
                         2 * input_image[y][x-1]   + 0 * input_image[y][x]   - 2 * input_image[y][x+1] +
@@ -103,12 +103,27 @@ module conv_engine_tb;
         begin
             $display("\n=== %s 테스트 시작 ===", test_name);
             
+            // BUG FIX: 테스트 패턴에 맞는 예상 결과를 '실행 직전'에 계산
+            if (test_name == "수직 에지") begin
+                generate_vertical_edge();
+                calculate_expected_vertical_edge();
+            end else if (test_name == "체크보드") begin
+                generate_checkerboard();
+                calculate_expected_checkerboard();
+            end
+
             // 초기화
             error_count = 0;
             result_row = 0;
             result_col = 0;
             pixel_count = 0;
             result_count = 0;
+            // Good practice: Clear the actual results array before each run
+            for (int y = 0; y < 30; y++) begin
+                for (int x = 0; x < 30; x++) begin
+                    actual_results[y][x] = 'x;
+                end
+            end
             
             // 리셋
             rst = 1;
@@ -129,28 +144,24 @@ module conv_engine_tb;
                     pixel_valid = 1;
                     pixel_in = input_image[y][x];
                     pixel_count++;
-                    
-                    if (pixel_count % 100 == 0) begin
-                        $display("진행률: %4d/1024 픽셀 처리", pixel_count);
-                    end
                 end
             end
             
             @(posedge clk);
             pixel_valid = 0;
             
-            $display("모든 픽셀 입력 완료. done 신호 대기 중...");
+            $display("모든 픽셀 입력 완료. done 신호 및 파이프라인 flush 대기 중...");
             wait (done_signal == 1);
+            // BUG FIX: Wait for the pipeline to be fully flushed.
+            #100; // Wait 10 clock cycles
             
             // 결과 검증
             $display("결과 검증 중...");
             for (int y = 0; y < 30; y++) begin
                 for (int x = 0; x < 30; x++) begin
                     if (actual_results[y][x] !== expected_result[y][x]) begin
-                        if (error_count < 10) begin  // 처음 10개 에러만 출력
-                            $display("❌ 오류 [%2d,%2d]: 예상=%d, 실제=%d, 차이=%d", 
-                                   y, x, expected_result[y][x], actual_results[y][x], 
-                                   expected_result[y][x] - actual_results[y][x]);
+                        if (error_count < 10) begin
+                            $display("❌ 오류 [%2d,%2d]: 예상=%d, 실제=%d", y, x, expected_result[y][x], actual_results[y][x]);
                         end
                         error_count++;
                     end
@@ -161,26 +172,6 @@ module conv_engine_tb;
                 $display("✅ 테스트 통과!");
             end else begin
                 $display("❌ %d개 오류 발생", error_count);
-            end
-            
-            // 샘플 출력 (첫 5x5 영역)
-            $display("\n샘플 결과 (첫 5x5 영역):");
-            $display("실제 결과:");
-            for (int y = 0; y < 5; y++) begin
-                $write("  ");
-                for (int x = 0; x < 5; x++) begin
-                    $write("%6d ", actual_results[y][x]);
-                end
-                $display("");
-            end
-            
-            $display("예상 결과:");
-            for (int y = 0; y < 5; y++) begin
-                $write("  ");
-                for (int x = 0; x < 5; x++) begin
-                    $write("%6d ", expected_result[y][x]);
-                end
-                $display("");
             end
             
             $display("=== %s 테스트 완료 ===\n", test_name);
@@ -199,14 +190,10 @@ module conv_engine_tb;
         #20;
         
         // 테스트 1: 수직 에지
-        generate_vertical_edge();
-        calculate_expected_vertical_edge();
         run_test("수직 에지");
         #100;
         
         // 테스트 2: 체크보드
-        generate_checkerboard();
-        calculate_expected_checkerboard();
         run_test("체크보드");
         #100;
         
