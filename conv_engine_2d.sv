@@ -51,9 +51,6 @@ module conv_engine_2d(
 	
 	always_ff@(posedge clk) begin
 		if(rst) begin
-			win_col0 <= '{default: '0};
-			win_col1 <= '{default: '0};
-			win_col2 <= '{default: '0};
 			line_buffer1 <= '{default: '0};
 			line_buffer2 <= '{default: '0};
 			pixel_window <= '{default: '0};

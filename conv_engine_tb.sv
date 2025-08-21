@@ -60,9 +60,9 @@ module conv_engine_tb;
                 for (int x = 1; x < 31; x++) begin
                     // Sobel X 커널 적용
                     expected_result[y-1][x-1] = 
-                        -1 * input_image[y-1][x-1] + 0 * input_image[y-1][x] + 1 * input_image[y-1][x+1] +
-                        -2 * input_image[y][x-1]   + 0 * input_image[y][x]   + 2 * input_image[y][x+1] +
-                        -1 * input_image[y+1][x-1] + 0 * input_image[y+1][x] + 1 * input_image[y+1][x+1];
+                        1 * input_image[y-1][x-1] + 0 * input_image[y-1][x] - 1 * input_image[y-1][x+1] +
+                        2 * input_image[y][x-1]   + 0 * input_image[y][x]   - 2 * input_image[y][x+1] +
+                        1 * input_image[y+1][x-1] + 0 * input_image[y+1][x] - 1 * input_image[y+1][x+1];
                 end
             end
         end
@@ -90,9 +90,9 @@ module conv_engine_tb;
             for (int y = 1; y < 31; y++) begin
                 for (int x = 1; x < 31; x++) begin
                     expected_result[y-1][x-1] = 
-                        -1 * input_image[y-1][x-1] + 0 * input_image[y-1][x] + 1 * input_image[y-1][x+1] +
-                        -2 * input_image[y][x-1]   + 0 * input_image[y][x]   + 2 * input_image[y][x+1] +
-                        -1 * input_image[y+1][x-1] + 0 * input_image[y+1][x] + 1 * input_image[y+1][x+1];
+                        1 * input_image[y-1][x-1] + 0 * input_image[y-1][x] - 1 * input_image[y-1][x+1] +
+                        2 * input_image[y][x-1]   + 0 * input_image[y][x]   - 2 * input_image[y][x+1] +
+                        1 * input_image[y+1][x-1] + 0 * input_image[y+1][x] - 1 * input_image[y+1][x+1];
                 end
             end
         end
