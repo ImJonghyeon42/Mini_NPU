@@ -25,12 +25,15 @@ module conv_engine_2d(
 																																{1, 0, -1}};
 	logic	signed	[17:0]	mac_out	[0 :	KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1];
 	
-	logic	signed	[18 : 0]	sum_stage1	[0 : 3];
-	logic	signed	[19 : 0]	sum_stage2	[0 : 1];
+	logic	signed	[18 : 0]	sum_stage1	[0 : 4];
+	logic	signed	[19 : 0]	sum_stage2	[0 : 2];
+	logic	signed	[20 : 0]	sum_stage3	[0 : 1];
 	logic	signed	[21 : 0]	final_result;
 	
 	logic	[$clog2(IMG_WIDTH) - 1 : 0]	cnt_x;
 	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
+	
+	logic	valid_in,valid_d1,valid_d2,valid_d3;
 	
 	enum	logic	[1:0]	{IDLE, PROCESSING, DONE} state, next_state;
 	
@@ -79,15 +82,20 @@ module conv_engine_2d(
 				sum_stage2	<=	'{default: '0} ;
 				final_result <= '0;
 			end	else begin
-				sum_stage1[0]	<=	mac_out [0] [0] + mac_out [0] [1];
-				sum_stage1[1]	<=	mac_out [0] [2] + mac_out [1] [0];
-				sum_stage1[2]	<=	mac_out [1] [1] + mac_out [1] [2];
-				sum_stage1[3]	<=	mac_out [2] [0] + mac_out [2] [1];
+				 sum_stage1[0] <= mac_out[0][0] + mac_out[0][1];
+				sum_stage1[1] <= mac_out[0][2] + mac_out[1][0];
+				sum_stage1[2] <= mac_out[1][1] + mac_out[1][2]; 
+				sum_stage1[3] <= mac_out[2][0] + mac_out[2][1];
+				sum_stage1[4] <= mac_out[2][2];
 					
-				sum_stage2[0]	<=	sum_stage1[0] + sum_stage1[1];
-				sum_stage2[1]	<=	sum_stage1[2] + sum_stage1[3];
+				sum_stage2[0] <= sum_stage1[0] + sum_stage1[1];
+				sum_stage2[1] <= sum_stage1[2] + sum_stage1[3];
+				sum_stage2[2] <= sum_stage1[4];
+				
+				sum_stage3[0] <= sum_stage2[0] + sum_stage2[1];
+				sum_stage3[1] <= sum_stage2[2];
 					
-				final_result	<=	sum_stage2[0] + sum_stage2[1] + mac_out[2] [2];
+				final_result <= sum_stage3[0] + sum_stage3[1];
 			end
 	end
 	
@@ -120,7 +128,21 @@ module conv_engine_2d(
 		end
 	end
 	
-	assign result_valid = (state == PROCESSING) && (cnt_x >= 2) && (cnt_y >= 2);
+	assign valid_in = (state == PROCESSING) && (cnt_x >= 2) && (cnt_y >= 2);
+	 always_ff @(posedge clk) begin
+        if (rst) begin
+            valid_d1 <= 1'b0;
+            valid_d2 <= 1'b0;
+            valid_d3 <= 1'b0;
+            result_valid <= 1'b0; // 최종 출력 valid
+        end else begin
+            valid_d1 <= valid_in;
+            valid_d2 <= valid_d1;
+            valid_d3 <= valid_d2;
+            result_valid <= valid_d3; // 4 사이클 지연된 valid 신호
+        end
+    end
+	
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);
 endmodule
