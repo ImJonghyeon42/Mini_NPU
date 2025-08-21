@@ -1,77 +1,112 @@
 `timescale 1ns/1ps
 
 module tb_top_controller;
-
-    // -- 1. å ìˆë»¿å ìŒê¹ˆ ç„ì‰ì˜™ å ìˆ?ë¯­ì˜™?ë®å ìˆë±œ å ìˆì‘“å ìŒëµ å ì„ìˆ² å ì„í¨å ìˆì„§ (Scope ?ëˆ§ï§ê¾©ì « å ìˆí‰¸é‡ê»“ì˜™) --
+// --- ½ÅÈ£ ¼±¾ğ (confidence Ãß°¡) ---
     logic clk, rst, start, rx_valid;
     logic [7:0] rx_data;
     logic [7:0] tx_data;
     logic [7:0] confidence;
     logic done_signal;
     
-    // test_pixels?ëª´å ? ç­Œë¤´ë«€è«­? å ìŒìŸ¿ç”•ê²¸ë«€ä»¥? å ìŒëµ å ìˆì§—
     logic [7:0] test_pixels [0:31]; 
 
-    // -- 2. DUT å ìŒëµ¥å ìˆë®å ì„ì‰˜å ìˆë®å ìŒë„… --
+    // --- DUT(Å×½ºÆ® ´ë»ó ¸ğµâ) ÀÎ½ºÅÏ½ºÈ­ ---
     top_controller dut (
         .clk, .rst, .start,
-        .rx_data, .rx_valid, // rx_valibe å ìŒê¶å ì™ì˜™ å ìˆë•¾å ìŒì Ÿ
+        .rx_data, .rx_valid,
         .tx_data, .done_signal, .confidence
     );
 
-    // -- 3. å ì„ê¹»å ìŒì‘ å ì„ë¬¸å ì„ì‰ --
+    // --- Å¬·° »ı¼º ---
     initial clk = 0;
-    always #5 clk = ~clk; // 10ns é›…ëš¯ëˆŠç”±? (100MHz)
+    always #5 clk = ~clk; // 100MHz Å¬·°
 
-    // -- 4. å ìˆë¼Šå ìŒëµ¬ å ìˆ?ë¯­ì˜™?ë®å ìˆë±œ å ìˆë»»å ì„ëŒ?ëµ³?ë”†ê¶ ?ë‡¡éºì– ì¨¯ (initial ?ë‡¡éºì– ì¨¯ å ìˆê½°å ìˆ?) --
+    // --- [ÇÙ½É] µ¥ÀÌÅÍ ÁÖÀÔ ¹× °á°ú È®ÀÎÀ» À§ÇÑ ÅÂ½ºÅ© ---
+    task run_test(string test_name, int expected_center);
+        begin
+            $display("--------------------------------------------------");
+            $display("--- Starting Test: %s ---", test_name);
+
+            // 1. Start ½ÅÈ£ ÁÖ±â
+            @(posedge clk);
+            start = 1;
+            @(posedge clk);
+            start = 0;
+
+            // 2. 32¹ÙÀÌÆ® ÇÈ¼¿ µ¥ÀÌÅÍ ÁÖÀÔ
+            $display("Injecting pixel data...");
+            for (int i=0; i<32; i++) begin
+                rx_valid = 1;
+                rx_data = test_pixels[i];
+                @(posedge clk);
+            end
+            rx_valid = 0;
+            
+            // 3. done_signalÀÌ 1ÀÌ µÉ ¶§±îÁö ´ë±â
+            $display("Data injection complete. Waiting for result...");
+            wait (done_signal == 1);
+            @(posedge clk); 
+
+            // 4. °á°ú È®ÀÎ
+            if (tx_data == expected_center) begin
+                $display("*************** TEST PASSED! ***************");
+                $display("Expected Center: %d, Got: %d", expected_center, tx_data);
+            end else begin
+                $display("*************** TEST FAILED! ***************");
+                $display("Expected Center: %d, Got: %d", expected_center, tx_data);
+            end
+            $display("Confidence: %d", confidence);
+            $display("--------------------------------------------------");
+        end
+		
+		$display("Result data: ");
+	for(int i=0; i<30; i++) begin
+		$display("Position %d: %d", i, $signed(dut.result_data[i]));
+	end
+		$display("Detected peaks: %d", dut.peak_count);
+	for(int i=0; i<dut.peak_count; i++) begin
+		$display("Peak %d: Position=%d, Value=%d", i, dut.peak_positions[i], dut.peak_values[i]);
+	end
+
+    endtask
+
+    // --- ¸ŞÀÎ Å×½ºÆ® ½Ã³ª¸®¿À ---
     initial begin
-        // ----- [1å ìˆë¼Š?â‘¨ì˜™: ?ë£¯?ëœƒç”±ê³¤ì˜™?ë„…] -----
-        rst = 1;
-        start = 0;
-        rx_valid = 0;
-        rx_data = '0;
-        
-        $display("Simulation Start: Resetting DUT...");
+        // 1. ÃÊ±âÈ­
+        rst = 1; start = 0; rx_valid = 0; rx_data = '0;
         #20;
         rst = 0;
-
-        // ----- [2å ìˆë¼Š?â‘¨ì˜™: å ìˆ?ë¯­ì˜™?ë®å ìˆë±œ å ìˆì‘“å ìŒëµ å ì„ìˆ² é¤“Î¿ì˜™?ëœ®å ?] -----
+        
+        // --- ½Ã³ª¸®¿À 1: ±âº» Á÷¼± ÁÖÇà ---
+        // µÎ Â÷¼±(8, 22)ÀÌ ¸íÈ®ÇÏ°Ô º¸ÀÓ. ¿¹»ó Áß¾Ó°ª: (8+22)/2 = 15
         for (int i=0; i<32; i++) test_pixels[i] = 0;
-        
-        test_pixels[15] = 100;
-        test_pixels[16] = 200; // å ìŒêµ™å ì„ë§’ ç­Œã…¼ë®†?ì†Šæ¶ì‰ì˜™
-        test_pixels[17] = 250;
-        
-        // ----- [3å ìˆë¼Š?â‘¨ì˜™: å ìˆì‘“å ìŒëµ å ì„ìˆ² é›…ëš¯ëˆ˜?ë¿¯] -----
-        @(posedge clk);
-        start = 1; // Start å ìˆë»¿å ìŒê¹ˆ ç„ì†ë®‡æº?
-        @(posedge clk);
-        start = 0;
+        test_pixels[8] = 200; test_pixels[22] = 200;
+        run_test("1. Straight Road", 15);
+        #20;
 
-        $display("Injecting 32 bytes of pixel data...");
-        for (int i=0; i<32; i++) begin
-            rx_valid = 1;
-            rx_data = test_pixels[i];
-            @(posedge clk);
-        end
-        rx_valid = 0;
-        
-        $display("Data injection complete. Waiting for result...");
+        // --- ½Ã³ª¸®¿À 2: ÁÂÈ¸Àü (ÀÌÀü ÇÁ·¹ÀÓ Áß¾Ó°ª 15 ±âÁØ) ---
+        // ¿ŞÂÊ¿¡ ÈÄº¸ 2°³(5, 9), ¿À¸¥ÂÊ¿¡ ÈÄº¸ 1°³(21)
+        // (5,9) Áß¾Ó: 7 (Â÷ÀÌ: 8) / (5,21) Áß¾Ó: 13 (Â÷ÀÌ: 2) / (9,21) Áß¾Ó: 15 (Â÷ÀÌ: 0)
+        // ÀÌÀü Áß¾Ó°ª 15¿Í °¡Àå °¡±î¿î (9, 21) ½ÖÀ» ¼±ÅÃÇØ¾ß ÇÔ. ¿¹»ó Áß¾Ó°ª: 15
+        for (int i=0; i<32; i++) test_pixels[i] = 0;
+        test_pixels[5] = 180; test_pixels[9] = 200; test_pixels[21] = 220;
+        run_test("2. Left Curve", 15);
+        #20;
 
-        // ----- [4å ìˆë¼Š?â‘¨ì˜™: é‡ê»‰í€—?ê¶¢ å ì™ì˜™ç–«ë€ì˜™ ç„ì‰ì˜™ å ìŒë„‡å ìŒëµ¥] -----
-        wait (dut.done_signal == 1);
-        @(posedge clk); 
+        // --- ½Ã³ª¸®¿À 3: Â÷¼± ÇÏ³ª¸¸ º¸ÀÏ ¶§ (¿À¸¥ÂÊ Â÷¼± »ç¶óÁü) ---
+        // À¯È¿ÇÑ ½ÖÀ» Ã£Áö ¸øÇÏ¹Ç·Î, ÀÌÀü ÇÁ·¹ÀÓÀÇ Áß¾Ó°ª(15)À» ±×´ë·Î À¯ÁöÇØ¾ß ÇÔ.
+        for (int i=0; i<32; i++) test_pixels[i] = 0;
+        test_pixels[9] = 200; // ¿ŞÂÊ Â÷¼± ÇÏ³ª¸¸ º¸ÀÓ
+        run_test("3. Single Lane Visible", 15);
+        #20;
 
-        if (dut.tx_data == 8'd200) begin
-            $display("*************** TEST PASSED! ***************");
-        end 
-        else begin
-            $display("*************** TEST FAILED! ***************");
-            $display("Expected: %d, Got: %d", 200, dut.tx_data);
-        end
-        
-        // ----- [5å ìˆë¼Š?â‘¨ì˜™: å ìˆë»»ç’ëºë±ìŸ¿å ìŒëµ å ìˆ?? ?ë„«?êµï§?] -----
-        #100;
+        // --- ½Ã³ª¸®¿À 4: ³ëÀÌÁî°¡ ¸¹À» ¶§ ---
+        // THRESHOLD(100) ÀÌÇÏÀÇ ¾àÇÑ ½ÅÈ£µéÀº ¹«½ÃµÇ¾î¾ß ÇÔ.
+        // À¯È¿ÇÑ ½ÖÀ» ¸ø Ã£À¸¹Ç·Î, ÀÌÀü Áß¾Ó°ª(15)À» À¯ÁöÇØ¾ß ÇÔ.
+        for (int i=0; i<32; i++) test_pixels[i] = 0;
+        test_pixels[5] = 90; test_pixels[15] = 80; test_pixels[25] = 95; // ¸ğµÎ 100 ÀÌÇÏ
+        run_test("4. Noisy Data", 15);
+        #20;
         $finish;
     end
 
