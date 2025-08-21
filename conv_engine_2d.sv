@@ -24,9 +24,9 @@ module conv_engine_2d(
 	logic	[7:0]	win_col1	[0		:	KERNEL_SIZE - 1];
 	logic	[7:0]	win_col2	[0		:	KERNEL_SIZE - 1];
 	
-	logic	signed	[7:0]	kernel	[0 : KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1]	=	'{{-1, 0, -1},
-																																{-2, 0, -2},
-																																{-1, 0, -1}};
+	logic	signed	[7:0]	kernel	[0 : KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1]	=	'{{1, 0, -1},
+																																{2, 0, -2},
+																																{1, 0, -1}};
 	logic	signed	[17:0]	mac_out	[0 :	KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1];
 	
 	logic	signed	[18 : 0]	sum_stage1	[0 : 3];
