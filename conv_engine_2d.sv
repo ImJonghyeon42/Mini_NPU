@@ -80,6 +80,7 @@ module conv_engine_2d(
 			if(rst) begin
 				sum_stage1	<=	'{default: '0} ;
 				sum_stage2	<=	'{default: '0} ;
+				sum_stage3	<=	'{default: '0} ;
 				final_result <= '0;
 			end	else begin
 				 sum_stage1[0] <= mac_out[0][0] + mac_out[0][1];
