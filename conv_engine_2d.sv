@@ -89,7 +89,7 @@ module conv_engine_2d(
 				
 				final_result <= '0;
 			end	else begin
-				 sum_stage1[0] <= mac_out[0][0] + mac_out[0][1];
+				sum_stage1[0] <= mac_out[0][0] + mac_out[0][1];
 				sum_stage1[1] <= mac_out[0][2] + mac_out[1][0];
 				sum_stage1[2] <= mac_out[1][1] + mac_out[1][2]; 
 				sum_stage1[3] <= mac_out[2][0] + mac_out[2][1];
