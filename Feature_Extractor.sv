@@ -11,6 +11,7 @@ module Feature_Extractor(
 );
 	logic signed [21:0] conv_result;
 	logic conv_valid;
+	logic conv_done_signal;
 	
 	logic Activation_valid;
 	logic signed [21:0] Activation_result;
@@ -19,7 +20,7 @@ module Feature_Extractor(
 		.clk, .rst, .start_signal, 
 		.pixel_in, .pixel_valid(pixel_valid_in),
 		.result_out(conv_result), .result_valid(conv_valid),
-		.done_signal(final_done_signal)
+		.done_signal(conv_done_signal)
 	);
 	
 	Activation_Function U1(
@@ -28,11 +29,12 @@ module Feature_Extractor(
 		.result_valid(Activation_valid), .result_out(Activation_result)
 	);
 	
-	Max_Pooling U2(
+	Max_Pooling #( .IMG_WIDTH(30), .IMG_HEIGHT(30))
+	U2 (
 		.clk, .rst, .start_signal,
 		.pixel_in(Activation_result), .pixel_valid(Activation_valid),
 		.result_out(final_result_out), .result_valid(final_result_valid), 
-		.done_signal()
-	);
+		.done_signal(final_done_signal)
+	   );
 	
 endmodule
