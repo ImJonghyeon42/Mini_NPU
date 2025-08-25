@@ -109,18 +109,31 @@ endtask
     // 체크보드 예상 결과 계산
     task calculate_expected_checkerboard;
     logic signed [21:0] temp_result; // 임시 변수 추가
+	int signed_window [0:2][0:2];
     begin
         $display("체크보드 예상 결과 계산 중...");
         for (int y = 1; y < 31; y++) begin
             for (int x = 1; x < 31; x++) begin
-                // 1. 컨볼루션 결과 계산 (signed 캐스팅 포함)
+
+                // 2. unsigned 픽셀 값을 signed int 윈도우로 먼저 복사 (명시적 타입 변환)
+                for (int i = 0; i < 3; i++) begin
+                    for (int j = 0; j < 3; j++) begin
+                        signed_window[i][j] = input_image[y-1+i][x-1+j];
+                    end
+                end
+
+                // 3. 이제 깨끗하게 통일된 signed_window로만 계산!
                 temp_result = 
-                    (1 * signed'(input_image[y-1][x-1])) + (0 * signed'(input_image[y-1][x])) + (-1 * signed'(input_image[y-1][x+1])) +
-                    (2 * signed'(input_image[y  ][x-1])) + (0 * signed'(input_image[y  ][x])) + (-2 * signed'(input_image[y  ][x+1])) +
-                    (1 * signed'(input_image[y+1][x-1])) + (0 * signed'(input_image[y+1][x])) + (-1 * signed'(input_image[y+1][x+1]));
-                
-                // 2. ReLU 적용
-                if (temp_result < 0) begin
+                    (1 * signed_window[0][0]) + (0 * signed_window[0][1]) + (-1 * signed_window[0][2]) +
+                    (2 * signed_window[1][0]) + (0 * signed_window[1][1]) + (-2 * signed_window[1][2]) +
+                    (1 * signed_window[2][0]) + (0 * signed_window[2][1]) + (-1 * signed_window[2][2]);
+
+                // 디버깅 코드 
+                if (y-1 == 0 && x-1 == 14) begin
+                    $display("... DEBUG after fix: temp_result = %d ...", temp_result);
+                end
+
+                if(temp_result < 0) begin
                     expected_result[y-1][x-1] = 0;
                 end else begin
                     expected_result[y-1][x-1] = temp_result;
@@ -128,7 +141,7 @@ endtask
             end
         end
     end
-	endtask
+endtask
     
     // 테스트 실행 태스크
     task run_test(string test_name);
