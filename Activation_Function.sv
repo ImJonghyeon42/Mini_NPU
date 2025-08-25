@@ -9,7 +9,7 @@ module Activation_Function(
 );
 	logic signed [21:0] result_out_reg;
 	
-	always_ff(posedge clk) begin
+	always_ff@(posedge clk) begin
 		if(rst) begin
 			result_out <= '0;
 			result_valid <= 1'b0;
