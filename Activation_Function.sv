@@ -5,7 +5,7 @@ module Activation_Function(
 	input logic pixel_valid,
 	input logic signed [21:0] pixel_in,
 	output logic result_valid,
-	output logic [21:0] result_out
+	output logic signed [21:0] result_out
 );
 	logic signed [21:0] result_out_reg;
 	
