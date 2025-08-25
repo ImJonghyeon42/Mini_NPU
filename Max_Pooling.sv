@@ -49,9 +49,9 @@ module Max_Pooling(
 		end else if(state == PROCESSING && pixel_valid) begin
 			if(cnt_x == IMG_WIDTH-1) begin
 				cnt_x <= '0;
-				cnt_y <= cnt_y + '1;
+				cnt_y <= cnt_y + 1'd1;
 			end else begin
-				cnt_x <= cnt_x + '1;
+				cnt_x <= cnt_x + 1'd1;
 			end
 		end
 	end
