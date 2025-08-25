@@ -9,8 +9,8 @@ module Max_Pooling(
 	output logic result_valid,
 	output logic done_signal
 );
-	localparam IMG_WIDTH = 30;
-	localparam IMG_HEIGHT = 30;
+	parameter IMG_WIDTH = 32;
+	parameter IMG_HEIGHT = 32;
 	
 	logic signed [21:0] pixel_d1;
 	logic signed [21:0] line_buffer [0 : IMG_WIDTH-1];
