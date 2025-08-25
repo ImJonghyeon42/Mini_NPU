@@ -25,14 +25,11 @@ module conv_engine_2d(
 																																{1, 0, -1}};
 	logic	signed	[17:0]	mac_out	[0 :	KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1];
 	
-	logic	signed	[18 : 0]	sum_stage1	[0 : 3];
-	logic	signed	[19 : 0]	sum_stage2	[0 : 1];
-	logic	signed	[20 : 0]	sum_stage3;
-	logic	signed	[21 : 0]	final_result;
+	logic	signed	[18 : 0]	sum_stage1	[0 : 4];
+	logic	signed	[19 : 0]	sum_stage2	[0 : 2];
+	logic	signed	[20 : 0]	sum_stage3	[0 : 1];
 	
-	logic	signed	[17 : 0]	mac_2_2_d1;
-	logic	signed	[17 : 0]	mac_2_2_d2;
-	logic	signed	[17 : 0]	mac_2_2_d3;
+	logic	signed	[21 : 0]	final_result;
 	
 	logic	[$clog2(IMG_WIDTH) - 1 : 0]	cnt_x;
 	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
@@ -83,26 +80,22 @@ module conv_engine_2d(
 				sum_stage2	<=	'{default: '0} ;
 				sum_stage3	<=	'0;
 				
-				mac_2_2_d1 <= '0;
-				mac_2_2_d2 <= '0;
-				mac_2_2_d3 <= '0;
-				
 				final_result <= '0;
 			end	else begin
 				sum_stage1[0] <= mac_out[0][0] + mac_out[0][1];
 				sum_stage1[1] <= mac_out[0][2] + mac_out[1][0];
 				sum_stage1[2] <= mac_out[1][1] + mac_out[1][2]; 
 				sum_stage1[3] <= mac_out[2][0] + mac_out[2][1];
-				mac_2_2_d1 <= mac_out[2][2];
+				sum_stage1[4] <= mac_out[2][2];
 					
 				sum_stage2[0] <= sum_stage1[0] + sum_stage1[1];
 				sum_stage2[1] <= sum_stage1[2] + sum_stage1[3];
-				mac_2_2_d2 <= mac_2_2_d1;
+				sum_stage2[2] <= sum_stage1[4];
 				
-				sum_stage3 <= sum_stage2[0] + sum_stage2[1];
-				mac_2_2_d3 <= mac_2_2_d2;
+				sum_stage3[0] <= sum_stage2[0] + sum_stage2[1];
+				sum_stage3[1] <= sum_stage2[2];
 					
-				final_result <= sum_stage3 + mac_2_2_d3;
+				final_result <= sum_stage3[0] + sum_stage3[1];
 			end
 	end
 	

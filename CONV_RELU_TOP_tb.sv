@@ -167,7 +167,8 @@ module CONV_RELU_TOP_tb;
             pixel_valid = 0;
             
             $display("모든 픽셀 입력 완료. done 신호 및 파이프라인 flush 대기 중...");
-            wait (done_signal == 1);
+            wait (result_count == 900);//wait (done_signal == 1);
+			@(posedge clk);
             // BUG FIX: Wait for the pipeline to be fully flushed.
             #100; // Wait 10 clock cycles
             
