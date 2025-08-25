@@ -2,6 +2,7 @@
 
 module tb_top_controller;
 
+
     // --- 신호 선언 (confidence 추가) ---
     logic clk, rst, start, rx_valid;
     logic [7:0] rx_data;
@@ -85,6 +86,7 @@ module tb_top_controller;
         run_test("1. Straight Road", 15);
         #20;
 
+   
         // --- 시나리오 2: 좌회전 (이전 프레임 중앙값 15 기준) ---
         // 왼쪽에 후보 2개(5, 9), 오른쪽에 후보 1개(21)
         // (5,9) 중앙: 7 (차이: 8) / (5,21) 중앙: 13 (차이: 2) / (9,21) 중앙: 15 (차이: 0)
@@ -108,7 +110,6 @@ module tb_top_controller;
         test_pixels[5] = 90; test_pixels[15] = 80; test_pixels[25] = 95; // 모두 100 이하
         run_test("4. Noisy Data", 15);
         #20;
-        
         $finish;
     end
 

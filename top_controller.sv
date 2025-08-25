@@ -5,6 +5,7 @@ module top_controller(
 	input logic start,
 	input logic [7:0] rx_data,
 	input logic  rx_valid,
+
 	output logic [7:0] tx_data, // 차선 중심 위치 (0~29)
 	output logic [7:0] confidence, //신뢰도 (두 차선의 평균 선명도)
 	output logic done_signal
@@ -55,6 +56,7 @@ module top_controller(
 			tx_data <= '0;
 			pixel_row_data <= '{default: '0};
 			confidence <= '0;
+
 			last_center_pos <= 8'd15;
 			peak_count <= '0;
 			peak_positions <= '{default : '0};
@@ -63,6 +65,7 @@ module top_controller(
 	        best_peak1_val <= '0; best_peak2_val <= '0;			
 			min_diff_reg <= 8'd255;
 			p1_reg <= '0; p2_reg <= '0;
+
 		end
 		else begin
 			start_signal <= '0;
