@@ -29,7 +29,8 @@ module Max_Pooling(
 	logic signed [21:0] compare_MAX; 
 	
 	logic last_pixel_processed;
-	logic done_signal_reg;
+	
+	enum logic [1:0] {IDLE, PROCESSING, DONE} state, next_state;
 	
 	always_ff@(posedge clk) begin
 		if(rst) begin
@@ -45,16 +46,40 @@ module Max_Pooling(
 		if(rst) begin
 			cnt_x <= '0;
 			cnt_y <= '0;
-		end else if(start_signal) begin
-			cnt_x <= '0;
-			cnt_y <= '0;
-		end else if(pixel_valid) begin
+		end else if(state == PROCESSING && pixel_valid) begin
 			if(cnt_x == IMG_WIDTH-1) begin
 				cnt_x <= '0;
 				cnt_y <= cnt_y + '1;
 			end else begin
 				cnt_x <= cnt_x + '1;
 			end
+		end
+	end
+	
+	always_comb begin
+		next_state = state;
+		case(state)
+		IDLE : begin
+			if(start_signal) begin
+				next_state = PROCESSING;
+			end
+		end
+		PROCESSING : begin
+			if(last_pixel_processed) begin
+				next_state = DONE;
+			end
+		end
+		DONE : begin
+			next_state = IDLE;
+		end
+		endcase
+	end
+	
+	always_ff@(posedge clk) begin
+		if(rst) begin
+			state <= IDLE;
+		end else begin
+			state <= next_state;
 		end
 	end
 	
@@ -70,14 +95,6 @@ module Max_Pooling(
 		end
 	end
 	
-	always_ff@(posedge clk) begin
-		if(rst) begin
-			done_signal_reg <= 1'b0;
-		end else begin
-			done_signal_reg <= last_pixel_processed;
-		end
-	end
-	
 	assign win_top_left = (cnt_x == 0) ? '0 : line_buffer[cnt_x - 1];
 	assign win_top_right = line_buffer[cnt_x];
 	assign win_bot_left = pixel_d1;
@@ -90,6 +107,5 @@ module Max_Pooling(
 	assign compare_MAX = (compare_stage1 >= compare_stage2) ? compare_stage1 : compare_stage2;
 	
 	assign last_pixel_processed = (cnt_y == IMG_HEIGHT-1) && (cnt_x == IMG_WIDTH-1) && pixel_valid;
-	assign done_signal = done_signal_reg;
-	
+	assign done_signal = (state == DONE);
 endmodule
