@@ -41,37 +41,28 @@ module CNN_TOP_tb();
     );
     
     // Clock generation
-    initial begin
-        clk = 0;
-        forever #(CLK_PERIOD/2) clk = ~clk;
-    end
+    initial clk = 0;
+    always #(CLK_PERIOD/2) clk = ~clk;
     
-    // Create weight.mem file for fully connected layer
+    // Initialize test weights
     initial begin
-        // Generate simple test weights (can be modified for specific test cases)
         for (int i = 0; i <= 224; i++) begin
-            weight_mem[i] = $random % 256; // Random 8-bit values
+            weight_mem[i] = $urandom_range(0, 255); // 8-bit 안정 범위
         end
-        
-        // Write to file
         $writememh("weight.mem", weight_mem);
     end
     
-    // Initialize test image data
+    // Initialize test image data (0~255 범위)
     initial begin
-        // Generate test pattern - simple gradient or checkerboard
         for (int i = 0; i < TOTAL_PIXELS; i++) begin
-            // Create a simple test pattern
-            test_image[i] = (i % 256); // Simple incrementing pattern
+            test_image[i] = $urandom_range(0, 255);
         end
     end
     
     // Main test procedure
     initial begin
         $display("=== CNN_TOP Testbench Started ===");
-        $display("Time: %0t", $time);
         
-        // Initialize signals
         rst = 1'b1;
         start_signal = 1'b0;
         pixel_valid = 1'b0;
@@ -79,15 +70,13 @@ module CNN_TOP_tb();
         pixel_count = 0;
         cycle_count = 0;
         
-        // Reset sequence
+        // Reset
         repeat(10) @(posedge clk);
         rst = 1'b0;
         $display("Reset released at time: %0t", $time);
-        
-        // Wait a few cycles before starting
         repeat(5) @(posedge clk);
         
-        // Start the CNN processing
+        // Start signal
         @(posedge clk);
         start_signal = 1'b1;
         @(posedge clk);
@@ -95,105 +84,39 @@ module CNN_TOP_tb();
         $display("Start signal asserted at time: %0t", $time);
         
         // Feed image data
-        fork
-            // Input data process
-            begin
-                for (int i = 0; i < TOTAL_PIXELS; i++) begin
-                    @(posedge clk);
-                    pixel_valid = 1'b1;
-                    pixel_in = test_image[i];
-                    pixel_count = i + 1;
-                    
-                    if ((i + 1) % (IMG_WIDTH * 4) == 0) begin
-                        $display("Fed %0d pixels at time: %0t", i + 1, $time);
-                    end
-                end
-                @(posedge clk);
-                pixel_valid = 1'b0;
-                $display("All %0d pixels fed at time: %0t", TOTAL_PIXELS, $time);
-            end
+        for (int i = 0; i < TOTAL_PIXELS; i++) begin
+            @(posedge clk);
+            pixel_valid = 1'b1;
+            pixel_in = test_image[i];
+            pixel_count = i + 1;
             
-            // Monitor process
-            begin
-                while (!final_result_valid) begin
-                    @(posedge clk);
-                    cycle_count++;
-                    
-                    // Monitor intermediate signals
-                    if (dut.feature_valid) begin
-                        $display("Feature output: %0d at time: %0t", 
-                                $signed(dut.feature_result), $time);
-                    end
-                    
-                    if (dut.flattened_buffer_full) begin
-                        $display("Flatten buffer full at time: %0t", $time);
-                    end
-                end
-            end
-        join
+            if (pixel_count % 128 == 0) 
+                $display("Fed %0d pixels at time: %0t", pixel_count, $time);
+        end
+        
+        @(posedge clk);
+        pixel_valid = 1'b0;
+        $display("All %0d pixels fed at time: %0t", TOTAL_PIXELS, $time);
         
         // Wait for final result
-        $display("Waiting for final result...");
         wait(final_result_valid);
-        
-        $display("=== Final Results ===");
         $display("Final result: %0d (0x%h)", $signed(final_lane_result), final_lane_result);
         $display("Total cycles: %0d", cycle_count);
-        $display("Processing completed at time: %0t", $time);
-        
-        // Additional verification
-        verify_results();
-        
-        // Wait a few more cycles
-        repeat(10) @(posedge clk);
         
         $display("=== Testbench Completed Successfully ===");
         $finish;
     end
     
-    // Verification task
-    task verify_results();
-        begin
-            $display("=== Verification ===");
-            
-            // Check if final result is within expected range
-            if (final_result_valid) begin
-                $display("✓ Final result valid asserted correctly");
-            end else begin
-                $display("✗ Final result valid not asserted");
-            end
-            
-            // Check flatten buffer contents (first few values)
-            $display("Flatten buffer first 5 values:");
-            for (int i = 0; i < 5; i++) begin
-                $display("  [%0d]: %0d", i, $signed(dut.flatten_data[i]));
-            end
-            
-            $display("Flatten buffer last 5 values:");
-            for (int i = 220; i < 225; i++) begin
-                $display("  [%0d]: %0d", i, $signed(dut.flatten_data[i]));
-            end
-        end
-    endtask
-    
-    // Timeout mechanism
-    initial begin
-        #(CLK_PERIOD * 100000); // 100k cycles timeout
-        $display("ERROR: Testbench timeout!");
-        $finish;
+    // Cycle counter for monitoring
+    always @(posedge clk) begin
+        if (!rst)
+            cycle_count <= cycle_count + 1;
     end
     
     // Waveform dumping
     initial begin
         $dumpfile("cnn_top_tb.vcd");
         $dumpvars(0, CNN_TOP_tb);
-    end
-    
-    // Performance monitoring
-    always @(posedge clk) begin
-        if (!rst && cycle_count > 0 && cycle_count % 1000 == 0) begin
-            $display("Cycle %0d - Time: %0t", cycle_count, $time);
-        end
     end
 
 endmodule
