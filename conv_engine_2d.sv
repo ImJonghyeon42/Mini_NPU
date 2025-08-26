@@ -135,7 +135,7 @@ module conv_engine_2d(
             valid_d2 <= 1'b0;
             valid_d3 <= 1'b0;
             valid_d4 <= 1'b0;
-            valid_d5 <= 1'b0;
+			valid_d5 <= 1'b0;
             result_valid <= 1'b0; // 최종 출력 valid
         end else begin
             valid_d1 <= valid_in;
@@ -143,7 +143,7 @@ module conv_engine_2d(
             valid_d3 <= valid_d2;
 			valid_d4 <= valid_d3;
 			valid_d5 <= valid_d4;
-            result_valid <= valid_d5; // 6 사이클 지연된 valid 신호
+            result_valid <= valid_d5; // 6사이클 지연된 valid 신호
         end
     end
 	
