@@ -80,7 +80,11 @@ module MAC_unit_tb();
             i_valid = 1'b0;
             
             // Wait for output (MAC has 3-cycle latency)
-            repeat(3) @(posedge clk);
+            // Need to wait until o_valid is asserted
+            repeat(5) begin
+                @(posedge clk);
+                if (o_valid) break;
+            end
             
             // Check result
             if (o_valid && sum_out === test_vectors[i].expected) begin
