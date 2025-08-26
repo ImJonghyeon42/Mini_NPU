@@ -55,7 +55,6 @@ module conv_engine_2d(
 	
 	always_ff@(posedge clk) begin
 		if(rst) begin
-<<<<<<< Updated upstream
 			line_buffer1 <= '{default: '0};
 			line_buffer2 <= '{default: '0};
 			pixel_window <= '{default: '0};
@@ -151,67 +150,4 @@ module conv_engine_2d(
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);
 endmodule
-=======
-			result_sum	<=	'0;
-			state	<=	IDLE;
-			cnt	<=	'0;
-		end else begin
-			case(state)
-			IDLE: if(start_signal)	state	<=	LOAD;
-
-			LOAD	:	begin
-				if(pixel_valid) begin
-					if(cnt < 2) begin
-						line_buffer2	<=	line_buffer1;
-				
-						line_buffer1[0]	<=	pixel_in;
-						for(int i = 1; i < IMG_WIDTH; i = i + 1) begin 
-							line_buffer1[i]	<=	line_buffer1[i - 1];
-						end
-				
-						win_col2[0] <=	pixel_in;
-						win_col2[1]	<=	win_col2[0];
-						win_col2[2]	<=	win_col2[1];
-					
-						win_col1[0] <=	line_buffer1[0];
-						win_col1[1]	<=	win_col1[0];
-						win_col1[2]	<=	win_col1[1];
-					
-						win_col0[0] <=	line_buffer2[0];
-						win_col0[1]	<=	win_col0[0];
-						win_col0[2]	<=	win_col0[1];
-						
-						pixel_window [0][0 : KERNEL_SIZE - 1]	<=	win_col0 [0		:	KERNEL_SIZE - 1];
-						pixel_window [1][0 : KERNEL_SIZE - 1]	<=	win_col1 [0		:	KERNEL_SIZE - 1];
-						pixel_window [2][0 : KERNEL_SIZE - 1]	<=	win_col2 [0		:	KERNEL_SIZE - 1];
-						
-					end
-				end
-				if(cnt	==	IMG_WIDTH - 1) begin
-					cnt	<=	'0;
-					state	<=	PROCESSING;
-				end
-				else begin
-					cnt	<=	cnt	+	'1;
-				end
-			end	
-			
-			PROCESSING : begin	
-				sum_stage1[0]	<=	mac_out [0] [0],	mac_out [0] [1];
-				sum_stage1[1]	<=	mac_out [0] [2],	mac_out [1] [0];
-				sum_stage1[2]	<=	mac_out [1] [1],	mac_out [1] [2];
-				sum_stage1[3]	<=	mac_out [2] [0],	mac_out [2] [1];
-					
-				sum_stage2[0]	<=	sum_stage1[0] + sum_stage1[1];
-				sum_stage2[1]	<=	sum_stage1[2] + sum_stage1[3];
-					
-			final_result	<=	{sum_stage2[0], 1'b0} + {sum_stage2[1], 1'b0} + {mac_out[2] [2], 3'b0};
-			end
-			
-		end
-	end
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 	
