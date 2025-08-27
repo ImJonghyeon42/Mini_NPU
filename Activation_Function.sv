@@ -14,7 +14,7 @@ module Activation_Function(
 			result_out <= '0;
 			result_valid <= 1'b0;
 		end else begin
-		//	result_out <= result_out_reg;
+			//result_out <= result_out_reg;
 			result_valid <= pixel_valid;
 		end
 	end
