@@ -29,6 +29,9 @@ module Max_Pooling(
 	logic signed [21:0] compare_MAX; 
 	
 	logic last_pixel_processed;
+	logic capture_condition_is_true;
+	
+    assign capture_condition_is_true = (state == PROCESSING && pixel_valid);
 	
 	enum logic [1:0] {IDLE, PROCESSING, DONE} state, next_state;
 	
@@ -36,7 +39,7 @@ module Max_Pooling(
 		if(rst) begin
 			pixel_d1 <= '0;
 			line_buffer <= '{default : '0};
-		end else if(pixel_valid) begin
+		end else if(state == PROCESSING && pixel_valid) begin
 			pixel_d1 <= pixel_in;
 			line_buffer[cnt_x] <= pixel_in;
 		end
@@ -91,6 +94,9 @@ module Max_Pooling(
 			result_valid <= pool_enable;
 			if(pool_enable) begin
 				result_out <= compare_MAX;
+				if (compare_MAX != 0) begin
+                $display("--- [DEBUG] Max_Pooling is producing NON-ZERO output: %h (%d)", compare_MAX, compare_MAX);
+				end
 			end
 		end
 	end
