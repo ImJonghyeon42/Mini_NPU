@@ -36,8 +36,6 @@ module conv_engine_2d(
 	
 	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4,valid_d5;
 	
-	logic last_pixel_seen;
-	
 	enum	logic	[1:0]	{IDLE, PROCESSING, DONE} state, next_state;
 	
 	genvar	i,	j;
@@ -110,7 +108,7 @@ module conv_engine_2d(
 		next_state = state; // 현재 상태 유지
 		case(state) 
 			IDLE : if(start_signal) next_state = PROCESSING;
-			PROCESSING : if (last_pixel_seen) next_state = DONE;
+			PROCESSING : if (pixel_valid && (cnt_x == IMG_WIDTH -1 ) && (cnt_y == IMG_HEIGHT - 1)) next_state = DONE;
 			DONE : next_state = IDLE;
 		endcase
 	end
@@ -148,14 +146,6 @@ module conv_engine_2d(
             result_valid <= valid_d5; // 6사이클 지연된 valid 신호
         end
     end
-	
-	always_ff@(posedge clk) begin
-		if(rst || state == IDLE) begin
-			last_pixel_seen <= 1'b0;
-		end else if(pixel_valid && (cnt_x == IMG_HEIGHT -1 ) && (cnt_y == IMG_HEIGHT - 1)) begin
-			last_pixel_seen <= 1'b1;
-		end
-	end
 	
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);
