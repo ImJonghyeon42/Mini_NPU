@@ -16,19 +16,6 @@ module Feature_Extractor(
 	logic Activation_valid;
 	logic signed [21:0] Activation_result;
 	
-	logic pooling_start_pulse;
-	logic Activation_valid_d1;
-	
-	always_ff@(posedge clk) begin
-		if(rst) begin
-			Activation_valid_d1 <= '0;
-		end else begin
-			Activation_valid_d1 <= Activation_valid;
-		end
-	end
-	
-	assign pooling_start_pulse = Activation_valid_d1 && ~Activation_valid;
-	
 	conv_engine_2d	U0(
 		.clk, .rst, .start_signal, 
 		.pixel_in, .pixel_valid(pixel_valid_in),
@@ -44,7 +31,7 @@ module Feature_Extractor(
 	
 	Max_Pooling #( .IMG_WIDTH(30), .IMG_HEIGHT(30))
 	U2 (
-		.clk, .rst, .start_signal(pooling_start_pulse),
+		.clk, .rst, 
 		.pixel_in(Activation_result), .pixel_valid(Activation_valid),
 		.result_out(final_result_out), .result_valid(final_result_valid), 
 		.done_signal(final_done_signal)
