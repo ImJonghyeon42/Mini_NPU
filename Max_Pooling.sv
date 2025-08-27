@@ -3,6 +3,7 @@ module Max_Pooling(
 	input logic clk, 
 	input logic rst,
 	input logic pixel_valid,
+	input logic start_signal,
 	input logic signed [21:0]pixel_in,
 	output logic signed [21:0] result_out,
 	output logic result_valid,
@@ -59,7 +60,7 @@ module Max_Pooling(
 		next_state = state;
 		case(state)
 		IDLE : begin
-			if(pixel_valid) begin
+			if(start_signal) begin
 				next_state = PROCESSING;
 			end
 		end

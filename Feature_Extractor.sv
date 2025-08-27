@@ -31,7 +31,7 @@ module Feature_Extractor(
 	
 	Max_Pooling #( .IMG_WIDTH(30), .IMG_HEIGHT(30))
 	U2 (
-		.clk, .rst, 
+		.clk, .rst, .start_signal,
 		.pixel_in(Activation_result), .pixel_valid(Activation_valid),
 		.result_out(final_result_out), .result_valid(final_result_valid), 
 		.done_signal(final_done_signal)
