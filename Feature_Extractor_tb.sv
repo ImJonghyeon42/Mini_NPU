@@ -11,9 +11,11 @@ module Feature_Extractor_tb;
     logic signed [21:0] final_result_out;
     logic             final_result_valid;
     logic             final_done_signal;
+
    logic signed [21:0] min_val;
    logic signed [21:0] max_val;
    logic signed [31:0] sum;// DUT 인스턴스화
+
     Feature_Extractor DUT (.*);
 
     // 클럭 및 리셋 생성
@@ -28,7 +30,9 @@ module Feature_Extractor_tb;
     // Conv output: (32-3+1) = 30x30
     // Max Pool output: 30/2 = 15x15
     localparam EXPECTED_OUTPUT_COUNT = 15 * 15;  // 225개
+
    logic signed [21:0] results_array [0:EXPECTED_OUTPUT_COUNT-1];
+
     // 3. 테스트 데이터 생성 함수
     function [7:0] generate_test_pixel(int x, int y);
         // 다양한 패턴 선택 가능
@@ -86,7 +90,6 @@ module Feature_Extractor_tb;
 
     // 6. 결과 수집 및 분석
     integer result_count = 0;
-   
     
     always @(posedge clk) begin
         if (!rst && final_result_valid) begin
@@ -120,9 +123,11 @@ module Feature_Extractor_tb;
             end
             
             // 결과 통계
-          min_val = results_array[0];
-          max_val = results_array[0];
-          sum = 0;
+
+            min_val = results_array[0];
+            max_val = results_array[0];
+            sum = 0;
+
             
             for (int i = 0; i < result_count; i++) begin
                 if (results_array[i] < min_val) min_val = results_array[i];

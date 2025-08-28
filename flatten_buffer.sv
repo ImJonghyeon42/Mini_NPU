@@ -21,6 +21,9 @@ module flatten_buffer (
 			write_addr_cnt <= '0;
 		end else begin
 			if(i_data_valid) begin
+				if (write_addr_cnt < 5) begin
+					$display("--- [DEBUG] flatten_buffer received data[%0d] = %h (%0d)", write_addr_cnt, i_data_in, i_data_in);
+				end
 				case(state)
 					IDLE : begin
 						buffer_mem[0] <= i_data_in;

@@ -29,10 +29,15 @@ module Fully_Connected_Layer(
 	
 	initial begin
 		logic [21:0] temp_unsigned_rom [0:224];
-		$readmemh("weight.mem", temp_unsigned_rom);
+		// 예시: $readmemh("C:/Users/SAMSUNG/vivado_end_project/CNN_test/CNN_test.srcs/sources_1/imports/Mini_NPU/weight.mem", temp_unsigned_rom);
+		$readmemh("C:/Users/SAMSUNG/vivado_end_project/CNN_test/CNN_test.srcs/sources_1/imports/CNN_test.sim/weight.mem", temp_unsigned_rom);
 		for(int i = 0; i <= 224; i++) begin
 			weight_ROM[i] = $signed(temp_unsigned_rom[i]);
 		end
+		$display("--- [DEBUG] Fully_Connected_Layer: Checking loaded weights... ---");
+		$display("--- [DEBUG] weight_ROM[0] = %h", weight_ROM[0]);
+		$display("--- [DEBUG] weight_ROM[1] = %h", weight_ROM[1]);
+		$display("--------------------------------------------------------------------");
 	end
 
 	MAC_unit MAC(
