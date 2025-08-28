@@ -136,17 +136,18 @@ module conv_engine_2d(
             valid_d3 <= 1'b0;
             valid_d4 <= 1'b0;
 			valid_d5 <= 1'b0;
-            result_valid <= 1'b0; // 최종 출력 valid
+            //result_valid <= 1'b0; 
         end else begin
             valid_d1 <= valid_in;
             valid_d2 <= valid_d1;
             valid_d3 <= valid_d2;
 			valid_d4 <= valid_d3;
 			valid_d5 <= valid_d4;
-            result_valid <= valid_d5; // 6사이클 지연된 valid 신호
+           // result_valid <= valid_d5; 
         end
     end
 	
+	assign  result_valid = valid_d5;
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);
 endmodule

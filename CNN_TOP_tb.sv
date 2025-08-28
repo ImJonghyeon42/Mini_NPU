@@ -95,6 +95,7 @@ module CNN_TOP_tb_advanced;
         end
         @(posedge clk);
         pixel_valid = 0;
+		pixel_in = 8'h00;
         $display("Image data injection complete. Waiting for DUT to finish...");
 
         // --- 4. 최종 결과가 나올 때까지 대기 (Timeout 추가) ---

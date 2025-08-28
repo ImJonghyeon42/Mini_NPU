@@ -24,8 +24,8 @@ module Feature_Extractor_tb;
     // 2. 데이터 준비 (메모리 선언)
     localparam IMG_WIDTH  = 32;
     localparam IMG_HEIGHT = 32;
-    localparam POOL_OUT_WIDTH = 16;
-    localparam POOL_OUT_HEIGHT = 16;
+    localparam POOL_OUT_WIDTH = 15;
+    localparam POOL_OUT_HEIGHT = 15;
 
     logic [7:0] image_mem [0:IMG_WIDTH*IMG_HEIGHT-1];
     logic signed [21:0] golden_mem [0:POOL_OUT_WIDTH*POOL_OUT_HEIGHT-1];
