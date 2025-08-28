@@ -31,8 +31,8 @@ module conv_engine_2d #(
 	
 	logic	signed	[21 : 0]	final_result;
 	
-	logic	[$clog2(N) - 1 : 0]	cnt_x;
-	logic	[$clog2(N)  - 1 : 0] cnt_y;
+	logic	[$clog2(IMG_SIZE) - 1 : 0]	cnt_x;
+	logic	[$clog2(IMG_SIZE)  - 1 : 0] cnt_y;
 	
 	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4,valid_d5;
 	
@@ -108,7 +108,7 @@ module conv_engine_2d #(
 		next_state = state; // 현재 상태 유지
 		case(state) 
 			IDLE : if(start_signal) next_state = PROCESSING;
-			PROCESSING : if (pixel_valid && (cnt_x == N -1 ) && (cnt_y == N - 1)) next_state = DONE;
+			PROCESSING : if (pixel_valid && (cnt_x == IMG_SIZE -1 ) && (cnt_y == IMG_SIZE - 1)) next_state = DONE;
 			DONE : next_state = IDLE;
 		endcase
 	end
@@ -121,7 +121,7 @@ module conv_engine_2d #(
 			cnt_x <= '0;
 			cnt_y <= '0;
 		end else if (pixel_valid && state == PROCESSING) begin
-			if(cnt_x == N - 1) begin
+			if(cnt_x == IMG_SIZE - 1) begin
 				cnt_x <= '0;
 				cnt_y <= cnt_y + 1'd1;
 			end else cnt_x <= cnt_x + 1'd1;

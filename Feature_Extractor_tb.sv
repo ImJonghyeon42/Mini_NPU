@@ -41,8 +41,8 @@ module Feature_Extractor_tb;
     // =================================================================
     // == 3. 골든 모델 (Golden Model) - 정답을 계산하는 함수
     // =================================================================
-    // DUT의 동작(Conv -> ReLU -> MaxPool)을 수학적으로 똑같이 구현
-    function void golden_model_feature_extractor(
+    // function -> function automatic 으로 수정
+    function automatic void golden_model_feature_extractor(
         input logic [7:0] image [0:IMG_HEIGHT-1][0:IMG_WIDTH-1],
         output logic signed [21:0] result [0:EXPECTED_OUTPUT_COUNT-1]
     );
@@ -66,10 +66,10 @@ module Feature_Extractor_tb;
         end
 
         // --- 2. Max Pooling 단계 ---
-        for (int y = 0; y < POOL_OUT_SIZE; y++) begin
+       for (int y = 0; y < POOL_OUT_SIZE; y++) begin
             for (int x = 0; x < POOL_OUT_SIZE; x++) begin
-                int map_y = y * 2;
-                int map_x = x * 2;
+                int map_y = y * 2; 
+                int map_x = x * 2; 
                 logic signed [21:0] max_val = -1; // 최댓값 초기화
                 
                 // 2x2 윈도우에서 최댓값 찾기
@@ -167,7 +167,7 @@ module Feature_Extractor_tb;
             
             if (error_count == 0) begin
                 $display("✓ TEST PASSED: All %0d results match the golden model.", EXPECTED_OUTPUT_COUNT);
-            else
+            end else begin
                 $display("✗ TEST FAILED: Found %0d mismatches.", error_count);
             end
         end
