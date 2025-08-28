@@ -51,23 +51,25 @@ module CNN_TOP_tb_advanced;
     // 3. [핵심] 시나리오 실행 태스크 (Task)
     // =================================================================
     task run_scenario(string image_file, string golden_file);
+    integer file_handle;
     begin
         $display("\n//--------------------------------------------------------------//");
         $display("--- [SCENARIO START] Image: %s ---", image_file);
 
         // --- 파일로부터 이미지와 Golden 데이터 로드 ---
-        $readmemh(image_file, image_mem);
+       $readmemh(image_file, image_mem);
 
-        integer file_handle = $fopen(golden_file, "r");
-        if (file_handle) begin
-            // golden 파일에서 10진수 형태의 정답 값을 읽어옴
-            void'($fscanf(file_handle, "%d", golden_result));
-            $fclose(file_handle);
-            $display("Golden Result Loaded: %0d", golden_result);
-        end else begin
-            $error("FATAL: Golden file not found -> %s", golden_file);
-            $finish;
-        end
+    // [수정] 여기서는 선언 없이 값만 할당합니다.
+    file_handle = $fopen(golden_file, "r"); 
+    if (file_handle) begin
+        // golden 파일에서 10진수 형태의 정답 값을 읽어옴
+        void'($fscanf(file_handle, "%d", golden_result));
+        $fclose(file_handle);
+        $display("Golden Result Loaded: %0d", golden_result);
+    end else begin
+        $error("FATAL: Golden file not found -> %s", golden_file);
+        $finish;
+    end
 
         // --- 1. 리셋 및 초기화 ---
         rst = 1;
@@ -115,11 +117,11 @@ module CNN_TOP_tb_advanced;
         if (final_lane_result === golden_result) begin
             $display("    >> DUT Result: %0d", final_lane_result);
             $display("    >> Expected:   %0d", golden_result);
-            $display("    >> [VERDICT] ✅ SCENARIO PASSED!");
+            $display("    >> [VERDICT] ? SCENARIO PASSED!");
         end else begin
             $display("    >> DUT Result: %0d (%h)", final_lane_result, final_lane_result);
             $display("    >> Expected:   %0d (%h)", golden_result, golden_result);
-            $display("    >> [VERDICT] ❌ SCENARIO FAILED!");
+            $display("    >> [VERDICT] ? SCENARIO FAILED!");
         end
         $display("//--------------------------------------------------------------//\n");
     end
