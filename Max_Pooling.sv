@@ -29,9 +29,7 @@ module Max_Pooling(
 	logic signed [21:0] compare_MAX; 
 	
 	logic last_pixel_processed;
-	logic capture_condition_is_true;
-	
-    assign capture_condition_is_true = (state == PROCESSING && pixel_valid);
+	//logic capture_condition_is_true;
 	
 	enum logic [1:0] {IDLE, PROCESSING, DONE} state, next_state;
 	
@@ -101,17 +99,17 @@ module Max_Pooling(
 		end
 	end
 	
-	assign win_top_left = (cnt_x == 0) ? '0 : line_buffer[cnt_x - 1];
-	assign win_top_right = line_buffer[cnt_x];
-	assign win_bot_left = pixel_d1;
+	assign win_top_left = (cnt_x == 0 || cnt_y == 0) ? '0 : line_buffer[cnt_x - 1];
+	assign win_top_right = (cnt_y == 0)? '0 : line_buffer[cnt_x];
+	assign win_bot_left = (cnt_x == 0)? '0 : pixel_d1;
 	assign win_bot_right = pixel_in;
 	
-	assign pool_enable = pixel_valid && (cnt_x[0] == 1'b1) && (cnt_y[0] == 1'b1);
+	assign pool_enable = pixel_valid && (cnt_x[0] == 1'b1) && (cnt_y[0] == 1'b1) && (state == PROCESSING);
 	
-	assign compare_stage1 = (win_top_left >= win_top_right) ? win_top_left : win_top_right;
-	assign compare_stage2 = (win_bot_left >= win_bot_right) ? win_bot_left : win_bot_right;
-	assign compare_MAX = (compare_stage1 >= compare_stage2) ? compare_stage1 : compare_stage2;
+	assign compare_stage1 = ($signed(win_top_left) >= $signed(win_top_right)) ? win_top_left : win_top_right;
+	assign compare_stage2 = ($signed(win_bot_left) >= $signed(win_bot_right)) ? win_bot_left : win_bot_right;
+	assign compare_MAX = ($signed(compare_stage1) >= $signed(compare_stage2)) ? compare_stage1 : compare_stage2;
 	
-	assign last_pixel_processed = (cnt_y == IMG_HEIGHT-1) && (cnt_x == IMG_WIDTH-1) && pixel_valid;
+	assign last_pixel_processed = (cnt_y == IMG_HEIGHT-1) && (cnt_x == IMG_WIDTH-1) && pixel_valid && (state == PROCESSING);
 	assign done_signal = (state == DONE);
 endmodule
