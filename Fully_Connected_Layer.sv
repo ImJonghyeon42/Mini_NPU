@@ -29,8 +29,7 @@ module Fully_Connected_Layer(
 	
 	initial begin
 		logic [21:0] temp_unsigned_rom [0:224];
-		// 예시: $readmemh("C:/Users/SAMSUNG/vivado_end_project/CNN_test/CNN_test.srcs/sources_1/imports/Mini_NPU/weight.mem", temp_unsigned_rom);
-		$readmemh("C:/Users/SAMSUNG/vivado_end_project/CNN_test/CNN_test.srcs/sources_1/imports/CNN_test.sim/weight.mem", temp_unsigned_rom);
+		$readmemh("C:/Users/SAMSUNG/vivado_end_project/feature_test/feature_test.sim/sim_1/behav/xsim/weight.mem", temp_unsigned_rom);
 		for(int i = 0; i <= 224; i++) begin
 			weight_ROM[i] = $signed(temp_unsigned_rom[i]);
 		end
@@ -100,16 +99,21 @@ module Fully_Connected_Layer(
 					mac_valid <= 1'b1;
 					valid_out_cnt <= '0;
 					state <= COMPUTE;
+					$display("[FC_DEBUG] Starting FC computation...");
 				end
 			end
 			COMPUTE : begin
 				if(mac_sum_out_valid) begin
 					accumulator_reg <= mac_sum_out;
 					valid_out_cnt <= valid_out_cnt + 1'b1;
+					if (valid_out_cnt < 5 || valid_out_cnt >= 220) begin
+						$display("[FC_DEBUG] MAC[%0d]: acc = %0d", valid_out_cnt, mac_sum_out);
+					end
 				end
 				if(mac_cnt == 224) begin
 					state <= FLUSH;
 					mac_valid <= 1'b0;
+					$display("[FC_DEBUG] Moving to FLUSH state...");
 				end else begin
 					mac_cnt <= mac_cnt + 1'b1;
 					mac_valid <= 1'b1;
@@ -120,9 +124,11 @@ module Fully_Connected_Layer(
 				if(mac_sum_out_valid) begin
 					accumulator_reg <= mac_sum_out;
 					valid_out_cnt <= valid_out_cnt + 1'b1;
+					$display("[FC_DEBUG] FLUSH: final_acc = %0d", mac_sum_out);
 				end
 				if(valid_out_cnt == 225) begin
 					state <= DONE;
+					$display("[FC_DEBUG] FC computation complete!");
 				end
 			end
 			DONE : begin

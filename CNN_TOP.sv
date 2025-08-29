@@ -15,6 +15,9 @@ module CNN_TOP(
 	logic flattened_buffer_full;
 	logic signed [21:0] flatten_data [0:224];
 	
+	logic fc_done_pulse;
+	logic fc_result_valid_d1;
+	
 	Feature_Extractor u_feature_extractor(
 		.clk, .rst, .pixel_valid_in(pixel_valid),
 		.start_signal, .pixel_in, .final_result_out(feature_result),
@@ -24,7 +27,7 @@ module CNN_TOP(
 	flatten_buffer u_flatten_buffer(
 		.clk, .rst, .i_data_valid(feature_valid),
 		.i_data_in(feature_result), .o_buffer_full(flattened_buffer_full),
-		.o_flattened_data(flatten_data)
+		.o_flattened_data(flatten_data), .i_fc_done(fc_done_pulse)
 	);
 	
 	Fully_Connected_Layer u_fully_connected_layer(
@@ -32,4 +35,12 @@ module CNN_TOP(
 		.i_flattened_data(flatten_data), .o_result_valid(final_result_valid), 
 		.o_result_data(final_lane_result)
 	);
+	
+	always_ff @(posedge clk) begin
+		if(rst) fc_result_valid_d1 <= 1'b0;
+		else fc_result_valid_d1 <= final_result_valid;
+	end
+	
+	assign fc_done_pulse = fc_result_valid_d1 & ~final_result_valid;
+	
 endmodule
