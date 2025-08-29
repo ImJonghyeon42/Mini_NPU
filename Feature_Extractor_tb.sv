@@ -57,32 +57,48 @@ module Feature_Extractor_tb;
                 // 3x3 MAC 연산
                 for (int ky = 0; ky < 3; ky++) begin
                     for (int kx = 0; kx < 3; kx++) begin
-                        mac_sum += image[y+ky][x+kx] * kernel[ky][kx];
+                        logic signed [21:0] pixel_val = $signed({1'b0, image[y+ky][x+kx]}); 
+                        logic signed [21:0] kernel_val = $signed(kernel[ky][kx]);
+                        mac_sum += pixel_val * kernel_val;
                     end
                 end
                 // ReLU 적용
                 conv_relu_map[y][x] = (mac_sum < 0) ? 0 : mac_sum;
+                
+                if (y < 3 && x < 8) begin
+                    $display("GOLDEN CONV[%0d,%0d] = %0d", x, y, conv_relu_map[y][x]);
+                end
             end
         end
 
-        // --- 2. Max Pooling 단계 ---
-       for (int y = 0; y < POOL_OUT_SIZE; y++) begin
-            for (int x = 0; x < POOL_OUT_SIZE; x++) begin
-                int map_y = y * 2; 
-                int map_x = x * 2; 
-                logic signed [21:0] max_val = -1; // 최댓값 초기화
-                
-                // 2x2 윈도우에서 최댓값 찾기
-                for (int py = 0; py < 2; py++) begin
-                    for (int px = 0; px < 2; px++) begin
-                        if (conv_relu_map[map_y+py][map_x+px] > max_val) begin
-                            max_val = conv_relu_map[map_y+py][map_x+px];
-                        end
-                    end
+       $display("=== Golden Max Pooling ===");
+pool_idx = 0;  // 초기화만 (int pool_idx = 0; 제거)
+for (int y = 0; y < POOL_OUT_SIZE; y++) begin
+    for (int x = 0; x < POOL_OUT_SIZE; x++) begin
+        int map_y = y * 2; 
+        int map_x = x * 2; 
+        logic signed [21:0] max_val = 0;
+        
+        // 2x2 윈도우에서 최댓값 찾기
+        for (int py = 0; py < 2; py++) begin
+            for (int px = 0; px < 2; px++) begin
+                if (conv_relu_map[map_y+py][map_x+px] > max_val) begin
+                    max_val = conv_relu_map[map_y+py][map_x+px];
                 end
-                result[pool_idx++] = max_val;
             end
         end
+        
+        result[pool_idx] = max_val;  // pool_idx++ 제거
+        
+        if (pool_idx < 15) begin  // 16에서 15로 수정
+            $display("GOLDEN POOL[%0d] = %0d (from 2x2 at conv pos %0d,%0d)", 
+                     pool_idx, max_val, map_x, map_y);
+        end
+        
+        pool_idx++;  // 한 번만 증가
+    end
+end
+		 $display("=== Golden Model Complete ===");
     endfunction
     
     // =================================================================
@@ -155,20 +171,20 @@ module Feature_Extractor_tb;
         #10; // 최종 신호 안정화를 위해 잠시 대기
         $display("\n=== FINAL ANALYSIS ===");
         if (result_count != EXPECTED_OUTPUT_COUNT) begin
-            $display("✗ TEST FAILED: Result count mismatch! Expected %0d, Got %0d", EXPECTED_OUTPUT_COUNT, result_count);
+            $display("? TEST FAILED: Result count mismatch! Expected %0d, Got %0d", EXPECTED_OUTPUT_COUNT, result_count);
         
         end else begin
             for (int i = 0; i < EXPECTED_OUTPUT_COUNT; i++) begin
                 if (dut_results[i] !== expected_results[i]) begin
-                    $display("✗ MISMATCH at Result[%0d]: DUT = %0d, Expected = %0d", i, dut_results[i], expected_results[i]);
+                    $display("? MISMATCH at Result[%0d]: DUT = %0d, Expected = %0d", i, dut_results[i], expected_results[i]);
                     error_count++;
                 end
             end
             
             if (error_count == 0) begin
-                $display("✓ TEST PASSED: All %0d results match the golden model.", EXPECTED_OUTPUT_COUNT);
+                $display("? TEST PASSED: All %0d results match the golden model.", EXPECTED_OUTPUT_COUNT);
             end else begin
-                $display("✗ TEST FAILED: Found %0d mismatches.", error_count);
+                $display("? TEST FAILED: Found %0d mismatches.", error_count);
             end
         end
 
