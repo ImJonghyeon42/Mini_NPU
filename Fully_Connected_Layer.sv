@@ -31,7 +31,7 @@ module Fully_Connected_Layer(
 	
 	initial begin
 		logic [21:0] temp_unsigned_rom [0:224];
-		$readmemh("C:/Users/SAMSUNG/vivado_end_project/feature_test/feature_test.sim/sim_1/behav/xsim/weight.mem", temp_unsigned_rom);
+		$readmemh("weight.mem", temp_unsigned_rom);
 		for(int i = 0; i <= 224; i++) begin
 			weight_ROM[i] = $signed(temp_unsigned_rom[i]);
 		end
