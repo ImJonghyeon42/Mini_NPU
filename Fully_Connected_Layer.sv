@@ -27,6 +27,8 @@ module Fully_Connected_Layer(
 	
 	logic mac_valid_d1,mac_valid_d2,mac_valid_d3;
 	
+	logic [3:0] done_counter;
+	
 	initial begin
 		logic [21:0] temp_unsigned_rom [0:224];
 		$readmemh("C:/Users/SAMSUNG/vivado_end_project/feature_test/feature_test.sim/sim_1/behav/xsim/weight.mem", temp_unsigned_rom);
