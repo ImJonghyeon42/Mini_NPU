@@ -1,5 +1,9 @@
 `timescale 1ns/1ps
-module conv_engine_2d(
+module conv_engine_2d #(
+	parameter DATA_WIDTH  = 8,// 데이터 정밀도를 위한 비트 폭. 세부사항과 하드웨어 효율성의 균형을 맞춥니다.
+	parameter IMG_SIZE    = 32,// 입력 특징 맵의 크기. 
+	parameter KERNEL_SIZE  = 3 // 합성곱 필터의 크기. 
+)(
 	input	logic	clk,
 	input	logic	rst,
 	
@@ -11,19 +15,15 @@ module conv_engine_2d(
 	output	logic							result_valid,
 	output	logic							done_signal
 );
-
-	localparam IMG_WIDTH	=	32;	//이미지 가로 크기
-	localparam IMG_HEIGHT	=	32;	//이미지 세로 크기
-	localparam KERNEL_SIZE	=	3;
 	
-	logic	[7:0]	line_buffer1	[0:IMG_WIDTH - 1];
-	logic	[7:0]	line_buffer2	[0:IMG_WIDTH - 1];
+	logic	[7:0]	line_buffer1	[0:IMG_SIZE-1];
+	logic	[7:0]	line_buffer2	[0:IMG_SIZE-1];
 	
-	logic	[7:0]	pixel_window	[0 : KERNEL_SIZE - 1][0 : KERNEL_SIZE - 1];
-	logic	signed	[7:0]	kernel	[0 : KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1]	=	'{{1, 0, -1},
+	logic	[7:0]	pixel_window	[0 : KERNEL_SIZE-1][0 : KERNEL_SIZE-1];
+	logic	signed	[7:0]	kernel	[0 : KERNEL_SIZE-1] [0 : KERNEL_SIZE-1]	=	'{{1, 0, -1},
 																																{2, 0, -2},
 																																{1, 0, -1}};
-	logic	signed	[17:0]	mac_out	[0 :	KERNEL_SIZE - 1] [0 : KERNEL_SIZE - 1];
+	logic	signed	[17:0]	mac_out	[0 :	KERNEL_SIZE-1] [0 : KERNEL_SIZE-1];
 	
 	logic	signed	[18 : 0]	sum_stage1	[0 : 4];
 	logic	signed	[19 : 0]	sum_stage2	[0 : 2];
@@ -31,8 +31,8 @@ module conv_engine_2d(
 	
 	logic	signed	[21 : 0]	final_result;
 	
-	logic	[$clog2(IMG_WIDTH) - 1 : 0]	cnt_x;
-	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
+	logic	[$clog2(IMG_SIZE) - 1 : 0]	cnt_x;
+	logic	[$clog2(IMG_SIZE)  - 1 : 0] cnt_y;
 	
 	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4,valid_d5;
 	
@@ -40,8 +40,8 @@ module conv_engine_2d(
 	
 	genvar	i,	j;
 	generate
-		for(i	=	0;	i	<	KERNEL_SIZE;	i	=	i + 1) begin
-			for(j = 0; j < KERNEL_SIZE; j = j + 1) begin
+		for(i	=	0;	i	<	KERNEL_SIZE ;	i	=	i + 1) begin
+			for(j = 0; j < KERNEL_SIZE ; j = j + 1) begin
 				compute_unit	MAC_INST(
 					.clk(clk),
 					.rst(rst),
@@ -63,7 +63,7 @@ module conv_engine_2d(
 			line_buffer2[cnt_x]	<=	line_buffer1[cnt_x];	
 			line_buffer1[cnt_x]	<=	pixel_in;
 			
-			for(int i = 0; i < KERNEL_SIZE; i = i + 1) begin 
+			for(int i = 0; i < KERNEL_SIZE ; i = i + 1) begin 
 				pixel_window[i][0]	<=	pixel_window[i][1];					
 				pixel_window[i][1]	<=	pixel_window[i][2];					
 			end
@@ -108,7 +108,7 @@ module conv_engine_2d(
 		next_state = state; // 현재 상태 유지
 		case(state) 
 			IDLE : if(start_signal) next_state = PROCESSING;
-			PROCESSING : if (pixel_valid && (cnt_x == IMG_WIDTH -1 ) && (cnt_y == IMG_HEIGHT - 1)) next_state = DONE;
+			PROCESSING : if (pixel_valid && (cnt_x == IMG_SIZE -1 ) && (cnt_y == IMG_SIZE - 1)) next_state = DONE;
 			DONE : next_state = IDLE;
 		endcase
 	end
@@ -121,7 +121,7 @@ module conv_engine_2d(
 			cnt_x <= '0;
 			cnt_y <= '0;
 		end else if (pixel_valid && state == PROCESSING) begin
-			if(cnt_x == IMG_WIDTH - 1) begin
+			if(cnt_x == IMG_SIZE - 1) begin
 				cnt_x <= '0;
 				cnt_y <= cnt_y + 1'd1;
 			end else cnt_x <= cnt_x + 1'd1;
