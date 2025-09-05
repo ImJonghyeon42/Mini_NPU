@@ -11,27 +11,21 @@ module MAC_unit(
 );
 	logic signed [21:0] data_a_reg;
 	logic signed [21:0] data_b_reg;
-	
 	logic signed [43:0] mul_result_reg;
-	
 	logic i_valid_d1;
 	logic i_valid_d2;
-	
 	logic signed [47:0] sum_in_d1;
 	logic signed [47:0] sum_in_d2;
 	
-	always_ff@(posedge clk) begin
-		if(rst) begin
+	always_ff@(posedge clk or negedge rst) begin 
+		if(!rst) begin  
 			data_a_reg <= '0;
 			data_b_reg <= '0;
-			
 			mul_result_reg <= '0;
 			sum_out <= '0;
-			
 			i_valid_d1 <= '0;
 			i_valid_d2 <= '0;
 			o_valid <= '0;
-			
 			sum_in_d1 <= '0;
 			sum_in_d2 <= '0;
 		end else begin

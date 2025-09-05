@@ -11,8 +11,8 @@ parameter BUFFER_SIZE = 225;
 logic [7:0] write_ptr;
 logic buffer_full_reg;
 
-always_ff @(posedge clk) begin
-    if (rst) begin
+always_ff @(posedge clk or negedge rst) begin  
+    if (!rst) begin  
         write_ptr <= 0;
         buffer_full_reg <= 0;
         for (int i = 0; i < BUFFER_SIZE; i++) begin

@@ -13,20 +13,15 @@ module Fully_Connected_Layer(
 	logic mac_valid;
 	
 	logic signed [21 : 0] weight_ROM [0 : 224];
-	
 	logic signed [47:0] accumulator_reg;
-	
 	logic signed [47:0] mac_sum_in;
 	logic signed [47:0] mac_sum_out;
 	logic mac_sum_out_valid;
 	
 	logic [7:0] valid_out_cnt;
-	
 	logic signed [21:0] data_a_d1, data_a_d2,data_a_d3;
 	logic signed [21:0] data_b_d1, data_b_d2,data_b_d3;
-	
 	logic mac_valid_d1,mac_valid_d2,mac_valid_d3;
-	
 	logic [3:0] done_counter;
 	
 	initial begin
@@ -53,15 +48,15 @@ module Fully_Connected_Layer(
 	logic i_start_d1;
 	logic start_pulse;
 	
-	always_ff@(posedge clk) begin
-		if(rst) i_start_d1 <= 1'b0;
+	always_ff@(posedge clk or negedge rst) begin 
+		if(!rst) i_start_d1 <= 1'b0; 
 		else i_start_d1 <= i_start;
 	end
 	
 	assign start_pulse = i_start & ~i_start_d1;
 	
-	always_ff@(posedge clk ) begin
-		if(rst) begin
+	always_ff@(posedge clk or negedge rst) begin  
+		if(!rst) begin  
 			state <= IDLE;
 			mac_cnt <= '0;
 			mac_valid <= 1'b0;

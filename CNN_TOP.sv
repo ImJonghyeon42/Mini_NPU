@@ -15,7 +15,6 @@ module CNN_TOP(
     logic flattened_buffer_full;
     logic signed [21:0] flatten_data [0:224];
     
-    // FC Layer 원샷 제어 변수들
     logic fc_executed;     
     logic fc_start_pulse;  
 
@@ -33,9 +32,8 @@ module CNN_TOP(
         .o_flattened_data(flatten_data)
     );
     
-    // FC Layer 원샷 제어 로직
-    always_ff @(posedge clk) begin
-        if (rst) begin
+    always_ff @(posedge clk or negedge rst) begin  
+        if (!rst) begin  
             fc_executed <= 0;
             fc_start_pulse <= 0;
         end else begin
