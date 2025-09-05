@@ -233,7 +233,7 @@ module cnn_control_logic_simple (
         frame_complete_reg,       // FRAME_COMPLETE [4]
         frame_start_reg,          // FRAME_START [3]
         pixel_valid_reg,          // PIXEL_VALID [2]
-        cnn_result_valid_sync[2], // RESULT_VALID [1]
+        cnn_result_valid_pipe[2], // RESULT_VALID [1]
         cnn_busy                  // CNN_BUSY [0]
     };
     
