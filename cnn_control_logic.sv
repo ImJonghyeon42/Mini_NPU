@@ -40,114 +40,68 @@ module cnn_control_logic_simple (
     localparam CTRL_FRAME_START     = 3;    // Bit 3: Frame start
     localparam CTRL_FRAME_COMPLETE  = 4;    // Bit 4: Frame complete
     
-    // ===== Internal Registers (완전 분리) =====
+    // ===== Internal Registers =====
     logic [31:0] frame_count_internal;
     logic [31:0] error_code_internal;
     
-    // 완전히 격리된 입력 캡처 레지스터들 (3단계 깊이)
-    logic [31:0] control_reg_sync [0:2];
-    logic [31:0] pixel_reg_sync [0:2];
-    logic cnn_result_valid_sync [0:2];
+    // 안전한 신호 동기화 (3단계)
+    logic [31:0] control_reg_d1, control_reg_d2, control_reg_d3;
+    logic [31:0] pixel_reg_d1, pixel_reg_d2, pixel_reg_d3;
+    logic cnn_result_valid_d1, cnn_result_valid_d2, cnn_result_valid_d3;
     
-    // 완전히 격리된 출력 레지스터들
+    // Edge detection 신호들
+    logic cnn_start_edge, cnn_reset_edge, pixel_valid_edge;
+    logic frame_start_edge, frame_complete_edge, cnn_result_edge;
+    
+    // 출력 레지스터들
     logic cnn_start_reg, cnn_reset_reg, pixel_valid_reg;
     logic frame_start_reg, frame_complete_reg;
     logic [7:0] pixel_data_reg;
-    
-    // State machine for safe control
-    typedef enum logic [2:0] {
-        IDLE = 3'b000,
-        CAPTURE = 3'b001,
-        PROCESS = 3'b010,
-        OUTPUT = 3'b011,
-        WAIT_CYCLE = 3'b100
-    } state_t;
-    
-    state_t current_state, next_state;
 
-    // ===== 3단계 Deep Synchronization (Complete Isolation) =====
+    // ===== 3단계 동기화 (안전한 격리) =====
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            control_reg_sync[0] <= '0;
-            control_reg_sync[1] <= '0;
-            control_reg_sync[2] <= '0;
-            pixel_reg_sync[0] <= '0;
-            pixel_reg_sync[1] <= '0;
-            pixel_reg_sync[2] <= '0;
-            cnn_result_valid_sync[0] <= '0;
-            cnn_result_valid_sync[1] <= '0;
-            cnn_result_valid_sync[2] <= '0;
+            control_reg_d1 <= '0;
+            control_reg_d2 <= '0;
+            control_reg_d3 <= '0;
+            pixel_reg_d1 <= '0;
+            pixel_reg_d2 <= '0;
+            pixel_reg_d3 <= '0;
+            cnn_result_valid_d1 <= '0;
+            cnn_result_valid_d2 <= '0;
+            cnn_result_valid_d3 <= '0;
         end else begin
-            // 3-stage deep pipeline for complete isolation
-            control_reg_sync[0] <= control_reg;
-            control_reg_sync[1] <= control_reg_sync[0];
-            control_reg_sync[2] <= control_reg_sync[1];
+            // 3단계 깊은 파이프라인
+            control_reg_d1 <= control_reg;
+            control_reg_d2 <= control_reg_d1;
+            control_reg_d3 <= control_reg_d2;
             
-            pixel_reg_sync[0] <= pixel_reg;
-            pixel_reg_sync[1] <= pixel_reg_sync[0];
-            pixel_reg_sync[2] <= pixel_reg_sync[1];
+            pixel_reg_d1 <= pixel_reg;
+            pixel_reg_d2 <= pixel_reg_d1;
+            pixel_reg_d3 <= pixel_reg_d2;
             
-            cnn_result_valid_sync[0] <= cnn_result_valid;
-            cnn_result_valid_sync[1] <= cnn_result_valid_sync[0];
-            cnn_result_valid_sync[2] <= cnn_result_valid_sync[1];
+            cnn_result_valid_d1 <= cnn_result_valid;
+            cnn_result_valid_d2 <= cnn_result_valid_d1;
+            cnn_result_valid_d3 <= cnn_result_valid_d2;
         end
     end
 
-    // ===== State Machine =====
+    // ===== Edge Detection (완전 격리) =====
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            current_state <= IDLE;
+            cnn_start_edge <= '0;
+            cnn_reset_edge <= '0;
+            pixel_valid_edge <= '0;
+            frame_start_edge <= '0;
+            frame_complete_edge <= '0;
+            cnn_result_edge <= '0;
         end else begin
-            current_state <= next_state;
-        end
-    end
-
-    always_comb begin
-        next_state = current_state;
-        case (current_state)
-            IDLE: 
-                next_state = CAPTURE;
-            CAPTURE: 
-                next_state = PROCESS;
-            PROCESS: 
-                next_state = OUTPUT;
-            OUTPUT: 
-                next_state = WAIT_CYCLE;
-            WAIT_CYCLE: 
-                next_state = IDLE;
-            default: 
-                next_state = IDLE;
-        endcase
-    end
-
-    // ===== Safe Edge Detection with State Machine =====
-    logic cnn_start_detected, cnn_reset_detected, pixel_valid_detected;
-    logic frame_start_detected, frame_complete_detected;
-    logic cnn_result_valid_detected;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            cnn_start_detected <= '0;
-            cnn_reset_detected <= '0;
-            pixel_valid_detected <= '0;
-            frame_start_detected <= '0;
-            frame_complete_detected <= '0;
-            cnn_result_valid_detected <= '0;
-        end else if (current_state == PROCESS) begin
-            // Only detect edges in PROCESS state to avoid loops
-            cnn_start_detected <= control_reg_sync[2][CTRL_CNN_START] && !control_reg_sync[1][CTRL_CNN_START];
-            cnn_reset_detected <= control_reg_sync[2][CTRL_CNN_RESET] && !control_reg_sync[1][CTRL_CNN_RESET];
-            pixel_valid_detected <= control_reg_sync[2][CTRL_PIXEL_VALID] && !control_reg_sync[1][CTRL_PIXEL_VALID];
-            frame_start_detected <= control_reg_sync[2][CTRL_FRAME_START] && !control_reg_sync[1][CTRL_FRAME_START];
-            frame_complete_detected <= control_reg_sync[2][CTRL_FRAME_COMPLETE] && !control_reg_sync[1][CTRL_FRAME_COMPLETE];
-            cnn_result_valid_detected <= cnn_result_valid_sync[2] && !cnn_result_valid_sync[1];
-        end else begin
-            cnn_start_detected <= '0;
-            cnn_reset_detected <= '0;
-            pixel_valid_detected <= '0;
-            frame_start_detected <= '0;
-            frame_complete_detected <= '0;
-            cnn_result_valid_detected <= '0;
+            cnn_start_edge <= control_reg_d3[CTRL_CNN_START] && !control_reg_d2[CTRL_CNN_START];
+            cnn_reset_edge <= control_reg_d3[CTRL_CNN_RESET] && !control_reg_d2[CTRL_CNN_RESET];
+            pixel_valid_edge <= control_reg_d3[CTRL_PIXEL_VALID] && !control_reg_d2[CTRL_PIXEL_VALID];
+            frame_start_edge <= control_reg_d3[CTRL_FRAME_START] && !control_reg_d2[CTRL_FRAME_START];
+            frame_complete_edge <= control_reg_d3[CTRL_FRAME_COMPLETE] && !control_reg_d2[CTRL_FRAME_COMPLETE];
+            cnn_result_edge <= cnn_result_valid_d3 && !cnn_result_valid_d2;
         end
     end
 
@@ -158,40 +112,40 @@ module cnn_control_logic_simple (
             error_code_internal <= ERROR_NONE;
         end else begin
             // Reset handling
-            if (cnn_reset_detected) begin
+            if (cnn_reset_edge) begin
                 error_code_internal <= ERROR_NONE;
                 $display("[CNN_CTRL] CNN Reset");
             end
             
             // Frame start handling
-            if (frame_start_detected) begin
+            if (frame_start_edge) begin
                 $display("[CNN_CTRL] Frame start - MicroBlaze controlled");
             end
             
             // CNN start handling
-            if (cnn_start_detected) begin
+            if (cnn_start_edge) begin
                 $display("[CNN_CTRL] CNN start command");
             end
             
             // Pixel handling
-            if (pixel_valid_detected) begin
-                $display("[CNN_CTRL] Pixel received: 0x%02h", pixel_reg_sync[2][7:0]);
+            if (pixel_valid_edge) begin
+                $display("[CNN_CTRL] Pixel received: 0x%02h", pixel_reg_d3[7:0]);
             end
             
             // CNN result handling
-            if (cnn_result_valid_detected) begin
+            if (cnn_result_edge) begin
                 frame_count_internal <= frame_count_internal + 1;
                 $display("[CNN_CTRL] CNN complete - Frame %0d", frame_count_internal + 1);
             end
             
             // Frame complete handling
-            if (frame_complete_detected) begin
+            if (frame_complete_edge) begin
                 $display("[CNN_CTRL] Frame complete - MicroBlaze controlled");
             end
         end
     end
 
-    // ===== Completely Isolated Output Stage =====
+    // ===== 출력 레지스터 (완전 격리) =====
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             cnn_start_reg <= '0;
@@ -200,26 +154,17 @@ module cnn_control_logic_simple (
             pixel_data_reg <= '0;
             frame_start_reg <= '0;
             frame_complete_reg <= '0;
-        end else if (current_state == OUTPUT) begin
-            // Only update outputs in OUTPUT state
-            cnn_start_reg <= cnn_start_detected;
-            cnn_reset_reg <= cnn_reset_detected;
-            pixel_valid_reg <= pixel_valid_detected;
-            pixel_data_reg <= pixel_reg_sync[2][7:0];
-            frame_start_reg <= frame_start_detected;
-            frame_complete_reg <= frame_complete_detected;
         end else begin
-            // Clear pulse signals in other states
-            cnn_start_reg <= '0;
-            cnn_reset_reg <= '0;
-            pixel_valid_reg <= '0;
-            frame_start_reg <= '0;
-            frame_complete_reg <= '0;
-            // Keep pixel_data_reg stable
+            cnn_start_reg <= cnn_start_edge;
+            cnn_reset_reg <= cnn_reset_edge;
+            pixel_valid_reg <= pixel_valid_edge;
+            pixel_data_reg <= pixel_reg_d3[7:0];
+            frame_start_reg <= frame_start_edge;
+            frame_complete_reg <= frame_complete_edge;
         end
     end
 
-    // ===== Final Output Assignments (No Combinatorial Path Possible) =====
+    // ===== 최종 출력 할당 (조합 논리 없음) =====
     assign cnn_start = cnn_start_reg;
     assign cnn_reset = cnn_reset_reg;
     assign pixel_valid = pixel_valid_reg;
@@ -227,17 +172,17 @@ module cnn_control_logic_simple (
     assign frame_start = frame_start_reg;
     assign frame_complete = frame_complete_reg;
     
-    // Status register (完全히 독립적)
+    // Status register (완전 독립적)
     assign status_reg = {
         27'b0,                    // Reserved [31:5]
         frame_complete_reg,       // FRAME_COMPLETE [4]
         frame_start_reg,          // FRAME_START [3]
         pixel_valid_reg,          // PIXEL_VALID [2]
-        cnn_result_valid_pipe[2], // RESULT_VALID [1]
+        cnn_result_valid_d3,      // RESULT_VALID [1]
         cnn_busy                  // CNN_BUSY [0]
     };
     
-    // Counter outputs (完全히 독립적)
+    // Counter outputs (완전 독립적)
     assign frame_counter = frame_count_internal;
     assign error_code = error_code_internal;
     assign frame_count_reg = frame_count_internal;
@@ -247,14 +192,14 @@ module cnn_control_logic_simple (
     integer pixel_count = 0;
     
     always @(posedge clk) begin
-        if (pixel_valid_detected) begin
+        if (pixel_valid_edge) begin
             pixel_count++;
             if (pixel_count <= 5 || (pixel_count % 100 == 0)) begin
                 $display("[CNN_CTRL] MicroBlaze Pixel[%0d] = 0x%02h", pixel_count, pixel_data_reg);
             end
         end
         
-        if (frame_start_detected) begin
+        if (frame_start_edge) begin
             pixel_count = 0;
             $display("[CNN_CTRL] MicroBlaze Frame started - pixel count reset");
         end
