@@ -15,9 +15,8 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 (
 	// Users to add ports here
 	
-	// ===== Register interface for CNN control =====
+	// ===== Register interface for CNN control (제어 전용) =====
 	output wire [C_S_AXI_DATA_WIDTH-1:0] control_reg_out,   // Control register output (R/W)
-	output wire [C_S_AXI_DATA_WIDTH-1:0] pixel_reg_out,     // Pixel data register output (W/O)
 	input wire [C_S_AXI_DATA_WIDTH-1:0] status_reg_in,      // Status register input (R/O)
 	input wire [C_S_AXI_DATA_WIDTH-1:0] result_low_in,      // Result low 32-bit input (R/O)
 	input wire [C_S_AXI_DATA_WIDTH-1:0] result_high_in,     // Result high 16-bit input (R/O)
@@ -111,25 +110,24 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	localparam integer OPT_MEM_ADDR_BITS = 2;
 	
 	//----------------------------------------------
-	//-- CNN Register Map (MicroBlaze C 코드와 완전 일치)
+	//-- CNN Register Map (제어 전용, 픽셀 레지스터 제거)
 	//------------------------------------------------
 	// Address offsets (C 코드 #define과 일치)
 	localparam REG_CONTROL_ADDR     = 3'h0;  // 0x00 - Control register (R/W)
-	localparam REG_PIXEL_DATA_ADDR  = 3'h1;  // 0x04 - Pixel data register (W/O)
-	localparam REG_STATUS_ADDR      = 3'h2;  // 0x08 - Status register (R/O)
-	localparam REG_RESULT_LOW_ADDR  = 3'h3;  // 0x0C - Result low 32-bit (R/O)
-	localparam REG_RESULT_HIGH_ADDR = 3'h4;  // 0x10 - Result high 16-bit (R/O)
-	localparam REG_FRAME_COUNT_ADDR = 3'h5;  // 0x14 - Frame count (R/O)
-	localparam REG_ERROR_CODE_ADDR  = 3'h6;  // 0x18 - Error code (R/O)
+	// PIXEL_DATA 레지스터 제거 (SPI 직접 연결로 불필요)
+	localparam REG_STATUS_ADDR      = 3'h1;  // 0x04 - Status register (R/O)
+	localparam REG_RESULT_LOW_ADDR  = 3'h2;  // 0x08 - Result low 32-bit (R/O)
+	localparam REG_RESULT_HIGH_ADDR = 3'h3;  // 0x0C - Result high 16-bit (R/O)
+	localparam REG_FRAME_COUNT_ADDR = 3'h4;  // 0x10 - Frame count (R/O)
+	localparam REG_ERROR_CODE_ADDR  = 3'h5;  // 0x14 - Error code (R/O)
 	
-	//-- Slave Registers (7개 총 레지스터)
+	//-- Slave Registers (6개 레지스터, 픽셀 레지스터 제거)
 	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg0;  // Control register (R/W)
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg1;  // Pixel data register (W/O)
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg2;  // Status register (R/O) 
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg3;  // Result low (R/O)
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg4;  // Result high (R/O)
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg5;  // Frame count (R/O)
-	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg6;  // Error code (R/O)
+	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg1;  // Status register (R/O) 
+	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg2;  // Result low (R/O)
+	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg3;  // Result high (R/O)
+	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg4;  // Frame count (R/O)
+	reg [C_S_AXI_DATA_WIDTH-1:0]	slv_reg5;  // Error code (R/O)
 	
 	wire	 slv_reg_rden;
 	wire	 slv_reg_wren;
@@ -147,15 +145,10 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	assign S_AXI_RRESP	= axi_rresp;
 	assign S_AXI_RVALID	= axi_rvalid;
 
-	// ===== Register Interface Assignments =====
+	// ===== Register Interface Assignments (제어 전용) =====
 	assign control_reg_out = slv_reg0;  // Control register output to CNN logic
-	assign pixel_reg_out = slv_reg1;     // Pixel data register output to CNN logic
 
 	// ===== AXI4LITE Write Address Ready Generation =====
-	// axi_awready is asserted for one S_AXI_ACLK clock cycle when both
-	// S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_awready is
-	// de-asserted when reset is low.
-
 	always @( posedge S_AXI_ACLK )
 	begin
 	  if ( S_AXI_ARESETN == 1'b0 )
@@ -167,10 +160,6 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    begin    
 	      if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en)
 	        begin
-	          // slave is ready to accept write address when 
-	          // there is a valid write address and write data
-	          // on the write address and data bus. This design 
-	          // expects no outstanding transactions. 
 	          axi_awready <= 1'b1;
 	          aw_en <= 1'b0;
 	        end
@@ -187,9 +176,6 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	end       
 
 	// ===== AXI4LITE Write Address Latching =====
-	// This process is used to latch the address when both 
-	// S_AXI_AWVALID and S_AXI_WVALID are valid. 
-
 	always @( posedge S_AXI_ACLK )
 	begin
 	  if ( S_AXI_ARESETN == 1'b0 )
@@ -200,17 +186,12 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    begin    
 	      if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en)
 	        begin
-	          // Write Address latching 
 	          axi_awaddr <= S_AXI_AWADDR;
 	        end
 	    end 
 	end       
 
 	// ===== AXI4LITE Write Ready Generation =====
-	// axi_wready is asserted for one S_AXI_ACLK clock cycle when both
-	// S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_wready is 
-	// de-asserted when reset is low. 
-
 	always @( posedge S_AXI_ACLK )
 	begin
 	  if ( S_AXI_ARESETN == 1'b0 )
@@ -221,10 +202,6 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    begin    
 	      if (~axi_wready && S_AXI_WVALID && S_AXI_AWVALID && aw_en )
 	        begin
-	          // slave is ready to accept write data when 
-	          // there is a valid write address and write data
-	          // on the write address and data bus. This design 
-	          // expects no outstanding transactions. 
 	          axi_wready <= 1'b1;
 	        end
 	      else
@@ -234,13 +211,7 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    end 
 	end       
 
-	// ===== Memory Mapped Register Write Logic =====
-	// The write data is accepted and written to memory mapped registers when
-	// axi_awready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted. 
-	// Write strobes are used to select byte enables of slave registers while writing.
-	// These registers are cleared when reset (active low) is applied.
-	// Slave register write enable is asserted when valid address and data are available
-	// and the slave is ready to accept the write address and write data.
+	// ===== Memory Mapped Register Write Logic (제어 전용) =====
 	assign slv_reg_wren = axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID;
 
 	always @( posedge S_AXI_ACLK )
@@ -248,51 +219,38 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	  if ( S_AXI_ARESETN == 1'b0 )
 	    begin
 	      slv_reg0 <= 0;  // Control register
-	      slv_reg1 <= 0;  // Pixel data register
-	      slv_reg2 <= 0;  // Status register (read-only)
-	      slv_reg3 <= 0;  // Result low (read-only)
-	      slv_reg4 <= 0;  // Result high (read-only)
-	      slv_reg5 <= 0;  // Frame count (read-only)
-	      slv_reg6 <= 0;  // Error code (read-only)
+	      slv_reg1 <= 0;  // Status register (read-only)
+	      slv_reg2 <= 0;  // Result low (read-only)
+	      slv_reg3 <= 0;  // Result high (read-only)
+	      slv_reg4 <= 0;  // Frame count (read-only)
+	      slv_reg5 <= 0;  // Error code (read-only)
 	    end 
 	  else begin
 	    if (slv_reg_wren)
 	      begin
 	        case ( axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] )
-	          REG_CONTROL_ADDR:  // Control register is writable
+	          REG_CONTROL_ADDR:  // Control register만 쓰기 가능
 	            for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
 	              if ( S_AXI_WSTRB[byte_index] == 1 ) begin
-	                // Respective byte enables are asserted as per write strobes 
 	                slv_reg0[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
 	              end  
-	          REG_PIXEL_DATA_ADDR:  // Pixel data register is writable
-	            for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
-	              if ( S_AXI_WSTRB[byte_index] == 1 ) begin
-	                // Pixel data register for CNN pixel input
-	                slv_reg1[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
-	              end  
-	          // All other registers are read-only
+	          // 모든 다른 레지스터는 읽기 전용
 	          default : begin
 	                      // No write operation for read-only registers
 	                    end
 	        endcase
 	      end
 	      
-	      // Update read-only registers from input signals (실시간 반영)
-	      slv_reg2 <= status_reg_in;      // Status register
-	      slv_reg3 <= result_low_in;      // Result low
-	      slv_reg4 <= result_high_in;     // Result high
-	      slv_reg5 <= frame_count_in;     // Frame count
-	      slv_reg6 <= error_code_in;      // Error code
+	      // 읽기 전용 레지스터 실시간 업데이트
+	      slv_reg1 <= status_reg_in;      // Status register
+	      slv_reg2 <= result_low_in;      // Result low
+	      slv_reg3 <= result_high_in;     // Result high
+	      slv_reg4 <= frame_count_in;     // Frame count
+	      slv_reg5 <= error_code_in;      // Error code
 	  end
 	end    
 
 	// ===== AXI4LITE Write Response Logic =====
-	// The write response and response valid signals are asserted by the slave 
-	// when axi_wready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted.  
-	// This marks the acceptance of address and indicates the status of 
-	// write transaction.
-
 	always @( posedge S_AXI_ACLK )
 	begin
 	  if ( S_AXI_ARESETN == 1'b0 )
@@ -304,15 +262,12 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    begin    
 	      if (axi_awready && S_AXI_AWVALID && ~axi_bvalid && axi_wready && S_AXI_WVALID)
 	        begin
-	          // indicates a valid write response is available
 	          axi_bvalid <= 1'b1;
 	          axi_bresp  <= 2'b0; // 'OKAY' response 
-	        end                   // work error responses in future
+	        end                   
 	      else
 	        begin
 	          if (S_AXI_BREADY && axi_bvalid) 
-	            //check if bready is asserted while bvalid is high) 
-	            //(there is a possibility that bready is always asserted high)   
 	            begin
 	              axi_bvalid <= 1'b0; 
 	            end  
@@ -321,12 +276,6 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	end   
 
 	// ===== AXI4LITE Read Address Ready Generation =====
-	// axi_arready is asserted for one S_AXI_ACLK clock cycle when
-	// S_AXI_ARVALID is asserted. axi_awready is 
-	// de-asserted when reset (active low) is asserted. 
-	// The read address is also latched when S_AXI_ARVALID is 
-	// asserted. axi_araddr is reset to zero on reset assertion.
-
 	always @( posedge S_AXI_ACLK )
 	begin
 	  if ( S_AXI_ARESETN == 1'b0 )
@@ -338,9 +287,7 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    begin    
 	      if (~axi_arready && S_AXI_ARVALID)
 	        begin
-	          // indicates that the slave has acceped the valid read address
 	          axi_arready <= 1'b1;
-	          // Read address latching
 	          axi_araddr  <= S_AXI_ARADDR;
 	        end
 	      else
@@ -351,13 +298,6 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	end       
 
 	// ===== AXI4LITE Read Valid Generation =====
-	// axi_rvalid is asserted for one S_AXI_ACLK clock cycle when both 
-	// S_AXI_ARVALID and axi_arready are asserted. The slave registers 
-	// data are available on the axi_rdata bus at this instance. The 
-	// assertion of axi_rvalid marks the validity of read data on the 
-	// bus and axi_rresp indicates the status of read transaction.axi_rvalid 
-	// is deasserted on reset (active low). axi_rresp and axi_rdata are 
-	// cleared to zero on reset (active low).  
 	always @( posedge S_AXI_ACLK )
 	begin
 	  if ( S_AXI_ARESETN == 1'b0 )
@@ -369,21 +309,17 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    begin    
 	      if (axi_arready && S_AXI_ARVALID && ~axi_rvalid)
 	        begin
-	          // Valid read data is available at the read data bus
 	          axi_rvalid <= 1'b1;
 	          axi_rresp  <= 2'b0; // 'OKAY' response
 	        end   
 	      else if (axi_rvalid && S_AXI_RREADY)
 	        begin
-	          // Read data is accepted by the master
 	          axi_rvalid <= 1'b0;
 	        end                
 	    end
 	end    
 
 	// ===== Memory Mapped Register Read Logic =====
-	// Slave register read enable is asserted when valid address is available
-	// and the slave is ready to accept the read address.
 	assign slv_reg_rden = axi_arready & S_AXI_ARVALID & ~axi_rvalid;
 	
 	always @(*)
@@ -391,12 +327,11 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	      // Address decoding for reading registers
 	      case ( axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] )
 	        REG_CONTROL_ADDR     : reg_data_out <= slv_reg0;  // Control
-	        REG_PIXEL_DATA_ADDR  : reg_data_out <= slv_reg1;  // Pixel data
-	        REG_STATUS_ADDR      : reg_data_out <= slv_reg2;  // Status
-	        REG_RESULT_LOW_ADDR  : reg_data_out <= slv_reg3;  // Result low
-	        REG_RESULT_HIGH_ADDR : reg_data_out <= slv_reg4;  // Result high
-	        REG_FRAME_COUNT_ADDR : reg_data_out <= slv_reg5;  // Frame count
-	        REG_ERROR_CODE_ADDR  : reg_data_out <= slv_reg6;  // Error code
+	        REG_STATUS_ADDR      : reg_data_out <= slv_reg1;  // Status
+	        REG_RESULT_LOW_ADDR  : reg_data_out <= slv_reg2;  // Result low
+	        REG_RESULT_HIGH_ADDR : reg_data_out <= slv_reg3;  // Result high
+	        REG_FRAME_COUNT_ADDR : reg_data_out <= slv_reg4;  // Frame count
+	        REG_ERROR_CODE_ADDR  : reg_data_out <= slv_reg5;  // Error code
 	        default : reg_data_out <= 0;
 	      endcase
 	end
@@ -410,9 +345,6 @@ module myip_CNN_v1_0_S00_AXI_CNN #
 	    end 
 	  else
 	    begin    
-	      // When there is a valid read address (S_AXI_ARVALID) with 
-	      // acceptance of read address by the slave (axi_arready), 
-	      // output the read dada 
 	      if (slv_reg_rden)
 	        begin
 	          axi_rdata <= reg_data_out;     // register read data
