@@ -7,10 +7,10 @@
 #include "sleep.h"
 #include "xil_types.h"
 
-/* ================= UART 선택 ================= */
+/* ================= UART 설정 ================= */
 #ifndef UARTB
   #if defined(XPAR_AXI_UARTLITE_1_BASEADDR)
-    #define UARTB XPAR_AXI_UARTLITE_1_BASEADDR  /* 앱/BT 연결 UARTLite */
+    #define UARTB XPAR_AXI_UARTLITE_1_BASEADDR
   #elif defined(XPAR_UARTLITE_1_BASEADDR)
     #define UARTB XPAR_UARTLITE_1_BASEADDR
   #else
@@ -22,188 +22,227 @@ static inline void uart_putc(char c){ XUartLite_SendByte(UARTB, (u8)c); }
 static void uart_puts(const char *s){ while(*s) uart_putc(*s++); }
 static void uart_flush_rx(void){ while(!XUartLite_IsReceiveEmpty(UARTB)) (void)XUartLite_RecvByte(UARTB); }
 
-/* ================= CNN IP 레지스터 맵 ================= */
-#define CNN_BASE    XPAR_MYIP_CNN_V1_0_BASEADDR  /* Block Design에서 할당될 주소 */
-#define CNN_CONTROL 0x00    /* 제어 레지스터 (bit0: start, bit1: reset) */
-#define CNN_STATUS  0x04    /* 상태 레지스터 (bit0: result_valid) */
-#define CNN_RESULT_LOW  0x08    /* CNN 결과 하위 32비트 */
-#define CNN_RESULT_HIGH 0x0C    /* CNN 결과 상위 16비트 */
+/* ================= CNN AXI Lite 레지스터 맵 ================= */
+#define CNN_BASE_ADDR    XPAR_CNN_AXI_LITE_WRAPPER_0_BASEADDR  // Vivado에서 할당될 주소
 
-/* ================= PWM IP 레지스터 맵 ================= */
+// AXI Lite 레지스터 오프셋 (CNN_AXI_Lite_Wrapper와 일치)
+#define REG_CONTROL      0x00    // 제어 레지스터
+#define REG_STATUS       0x04    // 상태 레지스터
+#define REG_RESULT_LOW   0x08    // CNN 결과 하위 32비트
+#define REG_RESULT_HIGH  0x0C    // CNN 결과 상위 16비트  
+#define REG_FRAME_COUNT  0x10    // 처리된 프레임 수
+#define REG_ERROR_CODE   0x14    // 오류 코드
+
+// 상태 레지스터 비트 정의
+#define STATUS_CNN_BUSY     (1 << 0)   // CNN 처리 중
+#define STATUS_RESULT_VALID (1 << 1)   // 결과 유효
+#define STATUS_SPI_COMPLETE (1 << 2)   // SPI 프레임 완료
+
+/* ================= PWM 및 초음파 설정 (기존 유지) ================= */
 #define PWM_BASE   XPAR_DCMOTOR_MYIP_V1_0_BASEADDR
 #define REG_EN     0x00
 #define REG_DIR    0x04
 #define REG_DUTY   0x08
 
-/* ================= 초음파 IP 베이스 ================= */
 #define UL_F   XPAR_ULTRASONIC_MYIP_V1_0_0_BASEADDR
 #define UL_R   XPAR_ULTRASONIC_MYIP_V1_0_1_BASEADDR
 #define UL_L   XPAR_ULTRASONIC_MYIP_V1_0_2_BASEADDR
 
-/* ================= 채널/차륜 매핑 ================= */
-#define CH_FR 0
-#define CH_FL 1
-#define CH_RL 2
-#define CH_RR 3
+/* ================= CNN 파라미터 (업데이트) ================= */
+#define CNN_TIMEOUT_MS      100     // CNN 결과 대기 최대 시간
+#define CNN_OUTPUT_SCALE    2048    // 추출된 가중치 기반 스케일링
+#define CNN_STEER_MAX       80      // 최대 조향각
 
-/* 특정 바퀴 반전(정/역 뒤집힘) — {FR,FL,RL,RR} */
-static const u8 MOTOR_INV[4] = { 1, 0, 1, 0 };
-
-/* ================= 파라미터 ================= */
-#define DUTY_MIN_MOVE   30     /* 주행 유지용 최소 듀티(빠른 바퀴용) */
-#define DUTY_MIN_TURN   14     /* 코너링 시 느린 바퀴 최소 듀티(펄싱 방지) */
-#define DUTY_MAX       100
-#define KICK_DUTY       70
-#define KICK_MS        120
-#define DEAD_US        150
-#define SPIN_PWM        80
-
-#define STEER_SIGN     (-1)    /* 양수=좌, 음수=우 (부호 스위치) */
-
-#define AUTO_BASE_PCT   50     /* 기본 크루즈 속도 */
-
-/* ==== 자율 튜닝 ==== */
-#define WALL_CM        50     /* 더 멀리서부터 회피 시작 */
-#define PANIC_CM       18      /* F만 비상 */
-#define STEER_K        22      /* 조향 민감도 상향 */
-
-#define NEAR_BOOST_CM  35      /* 가까운 구간이면 조향 가중치 추가 */
-#define STEER_BOOST     2      /* 가중치 배수 */
-
-/* 전방 감속 밴드 */
-#define FRONT_SLOW1_CM  85
-#define FRONT_SLOW2_CM  50
-#define FRONT_SLOW1_PCT 40
-#define FRONT_SLOW2_PCT 30
-
-/* F 근접 시 후진 파라미터 */
-#define BACKUP_MS      800     /* 0.8초 후진 */
-#define BACKUP_PCT      55     /* 후진 PWM(%) */
-
-/* ================= CNN 파라미터 ================= */
-#define CNN_TIMEOUT_MS    100   /* CNN 결과 대기 최대 시간 */
-#define CNN_SCALE_FACTOR  1000  /* CNN 결과 스케일링 */
-#define CNN_STEER_MAX     80    /* CNN 최대 조향각 */
-#define CNN_CONFIDENCE_MIN 0.6  /* CNN 신뢰도 최소값 */
-
-/* CNN 패턴 정의 (4클래스) */
+/* CNN 패턴 정의 */
 #define CNN_PATTERN_STRAIGHT    0
 #define CNN_PATTERN_LEFT_CURVE  1  
 #define CNN_PATTERN_RIGHT_CURVE 2
 #define CNN_PATTERN_START_END   3
 
-/* ================= 상태 ================= */
-static int  speed_pct = DUTY_MIN_MOVE; /* 0..100 */
-static int  steer     = 0;             /* -80..+80 (양수=좌, 음수=우) */
+/* ================= 기존 모터 제어 파라미터 (유지) ================= */
+#define DUTY_MIN_MOVE   30
+#define DUTY_MIN_TURN   14
+#define DUTY_MAX       100
+#define KICK_DUTY       70
+#define KICK_MS        120
+#define DEAD_US        150
+#define SPIN_PWM        80
+#define STEER_SIGN     (-1)
+#define AUTO_BASE_PCT   50
+#define WALL_CM        50
+#define PANIC_CM       18
+#define STEER_K        22
+#define NEAR_BOOST_CM  35
+#define STEER_BOOST     2
+#define FRONT_SLOW1_CM  85
+#define FRONT_SLOW2_CM  50
+#define FRONT_SLOW1_PCT 40
+#define FRONT_SLOW2_PCT 30
+#define BACKUP_MS      800
+#define BACKUP_PCT      55
+
+/* ================= 채널/차륜 매핑 (기존 유지) ================= */
+#define CH_FR 0
+#define CH_FL 1
+#define CH_RL 2
+#define CH_RR 3
+static const u8 MOTOR_INV[4] = { 1, 0, 1, 0 };
+
+/* ================= 상태 변수 ================= */
+static int  speed_pct = DUTY_MIN_MOVE;
+static int  steer     = 0;
 static char last_mode = 'X';
-static int  auto_mode = 0;             /* 0:수동 1:자율 2:CNN+초음파 융합 */
-
-/* CNN 상태 */
-static int  cnn_active = 0;            /* CNN 활성화 여부 */
-static s32  last_cnn_result = 0;       /* 마지막 CNN 결과 */
-static int  cnn_pattern = -1;          /* 현재 감지된 패턴 */
-static int  cnn_timeout_count = 0;     /* CNN 타임아웃 카운터 */
-
-/* 출력 데드밴드용 이전 듀티 저장(미세 변화 무시) */
+static int  auto_mode = 0;
+static int  cnn_active = 0;
+static s32  last_cnn_result = 0;
+static int  cnn_pattern = -1;
+static int  cnn_timeout_count = 0;
 static int prev_dutyL = -1, prev_dutyR = -1;
 
-/* ================= 유틸/저수준 IO ================= */
-static inline void w32(u32 reg, u32 v){ Xil_Out32(PWM_BASE + reg, v); }
-static inline u32 r32(u32 reg){ return Xil_In32(PWM_BASE + reg); }
-static inline int clamp(int v, int lo, int hi){ if(v<lo) return lo; if(v>hi) return hi; return v; }
-#define BIT(ch) (1u<<(ch))
-#define ALL_MASK (BIT(0)|BIT(1)|BIT(2)|BIT(3))
-
-/* ================= CNN 전용 함수 ================= */
+/* ================= AXI Lite 헬퍼 함수 ================= */
 
 /**
- * CNN 초기화 - 시스템 시작 시 1회 실행
+ * AXI Lite 레지스터 읽기
  */
-static void cnn_init(void) {
-    // CNN 리셋
-    Xil_Out32(CNN_BASE + CNN_CONTROL, 0x02);  // reset bit
-    usleep(1000);  // 1ms 대기
-    Xil_Out32(CNN_BASE + CNN_CONTROL, 0x00);  // reset 해제
-    
-    xil_printf("[CNN] 초기화 완료 - Base: 0x%08lx\r\n", (unsigned long)CNN_BASE);
+static inline u32 axi_read_reg(u32 offset) {
+    return Xil_In32(CNN_BASE_ADDR + offset);
 }
 
 /**
- * CNN 결과 읽기 (논블로킹)
- * @return: 성공시 조향각(-80~+80), 실패시 0
+ * AXI Lite 레지스터 쓰기
+ */
+static inline void axi_write_reg(u32 offset, u32 value) {
+    Xil_Out32(CNN_BASE_ADDR + offset, value);
+}
+
+/**
+ * CNN 상태 확인
+ */
+static int cnn_is_busy(void) {
+    u32 status = axi_read_reg(REG_STATUS);
+    return (status & STATUS_CNN_BUSY) ? 1 : 0;
+}
+
+/**
+ * CNN 결과 유효성 확인
+ */
+static int cnn_result_available(void) {
+    u32 status = axi_read_reg(REG_STATUS);
+    return (status & STATUS_RESULT_VALID) ? 1 : 0;
+}
+
+/**
+ * 처리된 프레임 수 읽기
+ */
+static u32 cnn_get_frame_count(void) {
+    return axi_read_reg(REG_FRAME_COUNT);
+}
+
+/* ================= CNN 전용 함수 (AXI Lite 기반) ================= */
+
+/**
+ * CNN 초기화
+ */
+static void cnn_init(void) {
+    // 제어 레지스터 초기화
+    axi_write_reg(REG_CONTROL, 0x00);
+    usleep(1000);
+    
+    xil_printf("[CNN] AXI Lite 인터페이스 초기화 완료\r\n");
+    xil_printf("[CNN] Base Address: 0x%08lx\r\n", (unsigned long)CNN_BASE_ADDR);
+    
+    // 상태 확인
+    u32 status = axi_read_reg(REG_STATUS);
+    xil_printf("[CNN] 초기 상태: 0x%08lx\r\n", (unsigned long)status);
+}
+
+/**
+ * CNN 48비트 결과를 조향각으로 변환 (AXI Lite 기반)
  */
 static s32 cnn_read_steering_angle(void) {
     // 1. 결과 유효성 확인
-    u32 status = Xil_In32(CNN_BASE + CNN_STATUS);
-    if (!(status & 0x01)) {
+    if (!cnn_result_available()) {
         return 0;  // 결과 없음
     }
     
-    // 2. CNN 결과 읽기 (48비트 → 32비트 변환)
-    u32 result_low = Xil_In32(CNN_BASE + CNN_RESULT_LOW);
-    u32 result_high = Xil_In32(CNN_BASE + CNN_RESULT_HIGH) & 0xFFFF;
+    // 2. 48비트 CNN 결과 읽기 (AXI Lite)
+    u32 result_low = axi_read_reg(REG_RESULT_LOW);
+    u32 result_high = axi_read_reg(REG_RESULT_HIGH) & 0xFFFF;
     
-    // 3. 48비트 결합 후 조향각 추출
+    // 3. 48비트 조합
     s64 raw_result = ((s64)result_high << 32) | result_low;
     
-    // 4. 스케일링 및 클램핑 (CNN 출력을 -80~+80 범위로)
-    s32 steering_angle = (s32)(raw_result / CNN_SCALE_FACTOR);
+    // 4. 조향각 변환 (추출된 가중치 기반)
+    s32 steering_angle = (s32)(raw_result / CNN_OUTPUT_SCALE);
+    
+    // 5. 조향각 제한
     steering_angle = clamp(steering_angle, -CNN_STEER_MAX, CNN_STEER_MAX);
     
     return steering_angle;
 }
 
 /**
- * CNN 패턴 분류 (4클래스)
- * @param result: CNN 원시 결과
- * @return: 0=직선, 1=좌곡선, 2=우곡선, 3=시작/종료
+ * CNN 패턴 분류 (업데이트된 임계값)
  */
 static int cnn_classify_pattern(s32 result) {
     int abs_result = (result < 0) ? -result : result;
     
-    if (abs_result < 10) {
-        return CNN_PATTERN_STRAIGHT;      // 직선
-    } else if (result > 30) {
-        return CNN_PATTERN_LEFT_CURVE;    // 좌곡선
-    } else if (result < -30) {
-        return CNN_PATTERN_RIGHT_CURVE;   // 우곡선
+    if (abs_result < 8) {
+        return CNN_PATTERN_STRAIGHT;
+    } else if (result > 25) {
+        return CNN_PATTERN_LEFT_CURVE;
+    } else if (result < -25) {
+        return CNN_PATTERN_RIGHT_CURVE;
     } else {
-        return CNN_PATTERN_START_END;     // 시작/종료
+        return CNN_PATTERN_START_END;
     }
 }
 
 /**
  * CNN 기반 조향 로직
- * @param cnn_steer: CNN에서 계산된 조향각
- * @return: 최종 적용할 조향각
  */
 static int cnn_apply_steering_logic(s32 cnn_steer) {
     cnn_pattern = cnn_classify_pattern(cnn_steer);
     
-    // 패턴별 조향 보정
     switch (cnn_pattern) {
         case CNN_PATTERN_STRAIGHT:
-            return cnn_steer;  // 직선: 그대로 적용
+            return cnn_steer;
             
         case CNN_PATTERN_LEFT_CURVE:
-            return clamp(cnn_steer + 5, -CNN_STEER_MAX, CNN_STEER_MAX);  // 좌곡선: 약간 강화
+            return clamp(cnn_steer + 3, -CNN_STEER_MAX, CNN_STEER_MAX);
             
         case CNN_PATTERN_RIGHT_CURVE:
-            return clamp(cnn_steer - 5, -CNN_STEER_MAX, CNN_STEER_MAX);  // 우곡선: 약간 강화
+            return clamp(cnn_steer - 3, -CNN_STEER_MAX, CNN_STEER_MAX);
             
         case CNN_PATTERN_START_END:
-            return cnn_steer / 2;  // 시작/종료: 부드럽게
+            return cnn_steer / 2;
             
         default:
             return 0;
     }
 }
 
-/* [기존 모터 제어 함수들은 그대로 유지] */
+/**
+ * CNN 시스템 상태 체크
+ */
+static void cnn_system_status(void) {
+    u32 status = axi_read_reg(REG_STATUS);
+    u32 frame_count = axi_read_reg(REG_FRAME_COUNT);
+    u32 error_code = axi_read_reg(REG_ERROR_CODE);
+    
+    xil_printf("[CNN_STATUS] Status: 0x%08lx\r\n", (unsigned long)status);
+    xil_printf("[CNN_STATUS] Frames: %lu\r\n", (unsigned long)frame_count);
+    xil_printf("[CNN_STATUS] Errors: %lu\r\n", (unsigned long)error_code);
+    xil_printf("[CNN_STATUS] Busy: %s\r\n", (status & STATUS_CNN_BUSY) ? "YES" : "NO");
+    xil_printf("[CNN_STATUS] Result: %s\r\n", (status & STATUS_RESULT_VALID) ? "VALID" : "NONE");
+}
+
+/* ================= 기존 모터 제어 함수들 (유지) ================= */
+
 static inline u8 apply_inv_to_dir_bits(u8 dir_bits){
     u8 d=0;
     for(int ch=0; ch<4; ++ch){
-        u8 bit = (dir_bits>>ch)&1u; /* 1=REV */
+        u8 bit = (dir_bits>>ch)&1u;
         if (MOTOR_INV[ch]) bit ^= 1u;
         d |= (bit<<ch);
     }
@@ -216,12 +255,12 @@ static inline u32 pack_duty(u8 d0,u8 d1,u8 d2,u8 d3){
 }
 
 static void set_all(u8 en_mask, u8 dir_rev_mask1bit, u8 d0,u8 d1,u8 d2,u8 d3){
-    w32(REG_EN, 0x0);
+    Xil_Out32(PWM_BASE + REG_EN, 0x0);
     usleep(DEAD_US);
     u8 dir_hw = apply_inv_to_dir_bits(dir_rev_mask1bit & 0x0F);
-    w32(REG_DIR,  dir_hw);
-    w32(REG_DUTY, pack_duty(d0,d1,d2,d3));
-    w32(REG_EN,   en_mask & 0x0F);
+    Xil_Out32(PWM_BASE + REG_DIR,  dir_hw);
+    Xil_Out32(PWM_BASE + REG_DUTY, pack_duty(d0,d1,d2,d3));
+    Xil_Out32(PWM_BASE + REG_EN,   en_mask & 0x0F);
 }
 
 static inline int min_nonzero(int a, int b){
@@ -234,10 +273,8 @@ static void compute_lr_duty(int base, int st, int *L, int *R){
     int s = st * STEER_SIGN;
     int l = (base*(100 + s))/100;
     int r = (base*(100 - s))/100;
-
     l = clamp(l,0,DUTY_MAX);
     r = clamp(r,0,DUTY_MAX);
-
     if (l >= r){
         if (l>0 && l<DUTY_MIN_MOVE) l = DUTY_MIN_MOVE;
         if (r>0 && r<DUTY_MIN_TURN) r = DUTY_MIN_TURN;
@@ -245,7 +282,6 @@ static void compute_lr_duty(int base, int st, int *L, int *R){
         if (r>0 && r<DUTY_MIN_MOVE) r = DUTY_MIN_MOVE;
         if (l>0 && l<DUTY_MIN_TURN) l = DUTY_MIN_TURN;
     }
-
     *L=l; *R=r;
 }
 
@@ -258,12 +294,16 @@ static void map_lr_to_duty(int dutyL,int dutyR,u8 *d0,u8 *d1,u8 *d2,u8 *d3){
     *d0=duty[0]; *d1=duty[1]; *d2=duty[2]; *d3=duty[3];
 }
 
-static void stop_all(void){ w32(REG_EN,0x0); last_mode='X'; auto_mode=0; cnn_active=0; }
+static void stop_all(void){ 
+    Xil_Out32(PWM_BASE + REG_EN, 0x0); 
+    last_mode='X'; 
+    auto_mode=0; 
+    cnn_active=0; 
+}
 
 static void drive_lr_sync(u8 dirL_revbit, u8 dirR_revbit, int dutyL, int dutyR){
     dutyL = clamp(dutyL,0,DUTY_MAX);
     dutyR = clamp(dutyR,0,DUTY_MAX);
-
     int delta_ok = 1;
     if (prev_dutyL>=0 && prev_dutyR>=0){
         int dL = (dutyL>prev_dutyL)? (dutyL-prev_dutyL) : (prev_dutyL-dutyL);
@@ -271,21 +311,17 @@ static void drive_lr_sync(u8 dirL_revbit, u8 dirR_revbit, int dutyL, int dutyR){
         if (dL < 2 && dR < 2) delta_ok = 0;
     }
     if (!delta_ok) return;
-
     u8 d0,d1,d2,d3; map_lr_to_duty(dutyL,dutyR,&d0,&d1,&d2,&d3);
-
     u8 dir_bits = 0;
-    if (dirL_revbit){ dir_bits |= BIT(CH_RL); dir_bits |= BIT(CH_FL); }
-    if (dirR_revbit){ dir_bits |= BIT(CH_RR); dir_bits |= BIT(CH_FR); }
-
+    if (dirL_revbit){ dir_bits |= (1<<CH_RL); dir_bits |= (1<<CH_FL); }
+    if (dirR_revbit){ dir_bits |= (1<<CH_RR); dir_bits |= (1<<CH_FR); }
     int need_kick = (last_mode=='X') || (dutyL<=DUTY_MIN_TURN) || (dutyR<=DUTY_MIN_TURN);
     if (need_kick && (dutyL>0 || dutyR>0)){
         u8 kd0,kd1,kd2,kd3; map_lr_to_duty(KICK_DUTY,KICK_DUTY,&kd0,&kd1,&kd2,&kd3);
-        set_all(ALL_MASK, dir_bits, kd0,kd1,kd2,kd3);
+        set_all(0x0F, dir_bits, kd0,kd1,kd2,kd3);
         usleep(KICK_MS*1000);
     }
-    set_all(ALL_MASK, dir_bits, d0,d1,d2,d3);
-
+    set_all(0x0F, dir_bits, d0,d1,d2,d3);
     prev_dutyL = dutyL;
     prev_dutyR = dutyR;
 }
@@ -293,23 +329,21 @@ static void drive_lr_sync(u8 dirL_revbit, u8 dirR_revbit, int dutyL, int dutyR){
 static void spin_with_rear_fix(int left) {
     u8 d0,d1,d2,d3;
     map_lr_to_duty(SPIN_PWM, SPIN_PWM, &d0,&d1,&d2,&d3);
-
     u8 dir_bits = 0;
     if (left){
-        dir_bits |= BIT(CH_FL);
-        dir_bits |= BIT(CH_RR);
+        dir_bits |= (1<<CH_FL);
+        dir_bits |= (1<<CH_RR);
     }else{
-        dir_bits |= BIT(CH_FR);
-        dir_bits |= BIT(CH_RL);
+        dir_bits |= (1<<CH_FR);
+        dir_bits |= (1<<CH_RL);
     }
-
     int need_kick = (last_mode=='X');
     if (need_kick){
         u8 kd0,kd1,kd2,kd3; map_lr_to_duty(KICK_DUTY, KICK_DUTY, &kd0,&kd1,&kd2,&kd3);
-        set_all(ALL_MASK, dir_bits, kd0,kd1,kd2,kd3);
+        set_all(0x0F, dir_bits, kd0,kd1,kd2,kd3);
         usleep(KICK_MS*1000);
     }
-    set_all(ALL_MASK, dir_bits, d0,d1,d2,d3);
+    set_all(0x0F, dir_bits, d0,d1,d2,d3);
 }
 
 static void go_forward_curved(void){
@@ -333,16 +367,139 @@ static void reapply_motion(void){
     }
 }
 
-static void speed_step(int d){
-    auto_mode=0; cnn_active=0;
-    speed_pct += d;
-    if (speed_pct!=0) speed_pct = clamp(speed_pct,DUTY_MIN_TURN,DUTY_MAX);
-    else speed_pct = 0;
-    xil_printf("SPD=%d%%, STEER=%d\r\n",speed_pct,steer);
-    reapply_motion();
+/* ================= 초음파 읽기 (기존 유지) ================= */
+static inline u32 ultra_read_once(u32 base){
+    u32 ones = Xil_In32(base + 0x00) & 0xF;
+    u32 tens = Xil_In32(base + 0x04) & 0xF;
+    return tens*10 + ones;
 }
 
-/* [기존 C 파서 코드들도 그대로 유지] */
+static u32 ultra_read_avg(u32 base, int n){
+    u32 sum=0, cnt=0;
+    for(int i=0;i<n;i++){
+        u32 v = ultra_read_once(base);
+        if(v>0 && v<=400){ sum+=v; cnt++; }
+        usleep(1000);
+    }
+    return (cnt? sum/cnt : 0);
+}
+
+/* ================= CNN + 초음파 융합 자율주행 (AXI Lite 기반) ================= */
+static void auto_step_with_cnn(void){
+    /* 1) 초음파 센서 읽기 */
+    u32 F = ultra_read_avg(UL_F, 3);
+    u32 R = ultra_read_avg(UL_R, 3);
+    u32 L = ultra_read_avg(UL_L, 3);
+
+    /* 2) 비상상황: 전방 근접 시 기존 로직 우선 */
+    if (F>0 && F<=PANIC_CM){
+        int left_more_space = (L >= R);
+        int save_spd = speed_pct, save_st = steer;
+        speed_pct = BACKUP_PCT;
+        steer = 0;
+        go_backward_curved();
+        usleep(BACKUP_MS * 1000);
+        if (left_more_space) turn_left_spin();
+        else                 turn_right_spin();
+        for(int i=0;i<10 && auto_mode;i++) usleep(100000);
+        speed_pct = AUTO_BASE_PCT;
+        steer = 0;
+        go_forward_curved();
+        return;
+    }
+
+    /* 3) 전방 감속 */
+    if      (F>0 && F<FRONT_SLOW2_CM) speed_pct = FRONT_SLOW2_PCT;
+    else if (F>0 && F<FRONT_SLOW1_CM) speed_pct = FRONT_SLOW1_PCT;
+    else                              speed_pct = AUTO_BASE_PCT;
+
+    /* 4) 조향 결정: CNN vs 초음파 융합 */
+    int final_steer = 0;
+    
+    if (cnn_active) {
+        /* CNN 결과 읽기 (AXI Lite) */
+        s32 cnn_steer = cnn_read_steering_angle();
+        
+        if (cnn_steer != 0) {
+            /* CNN 결과 가공 */
+            int processed_cnn_steer = cnn_apply_steering_logic(cnn_steer);
+            last_cnn_result = processed_cnn_steer;
+            cnn_timeout_count = 0;
+            
+            /* 초음파 장애물 회피 */
+            int obstacle_steer = 0;
+            if (R>0 && R<=WALL_CM) obstacle_steer +=  (WALL_CM - (int)R) * STEER_K;
+            if (L>0 && L<=WALL_CM) obstacle_steer += -(WALL_CM - (int)L) * STEER_K;
+
+            int side_near = min_nonzero((int)R, (int)L);
+            if (side_near>0 && side_near <= NEAR_BOOST_CM){
+                obstacle_steer *= STEER_BOOST;
+            }
+            
+            /* 융합 제어 로직 */
+            if (abs(obstacle_steer) > 20) {
+                final_steer = clamp(obstacle_steer, -80, 80);
+            } else if (abs(obstacle_steer) > 10) {
+                final_steer = clamp((obstacle_steer * 2 + processed_cnn_steer) / 3, -80, 80);
+            } else {
+                final_steer = clamp(processed_cnn_steer, -80, 80);
+            }
+            
+        } else {
+            /* CNN 결과 없음 → 타임아웃 처리 */
+            cnn_timeout_count++;
+            if (cnn_timeout_count > 10) {
+                int s = 0;
+                if (R>0 && R<=WALL_CM) s +=  (WALL_CM - (int)R) * STEER_K;
+                if (L>0 && L<=WALL_CM) s += -(WALL_CM - (int)L) * STEER_K;
+                
+                int side_near = min_nonzero((int)R, (int)L);
+                if (side_near>0 && side_near <= NEAR_BOOST_CM){
+                    s *= STEER_BOOST;
+                }
+                final_steer = clamp(s, -80, +80);
+                last_cnn_result = last_cnn_result * 9 / 10;
+            } else {
+                final_steer = last_cnn_result;
+            }
+        }
+    } else {
+        /* CNN 비활성 → 기존 초음파 로직 */
+        int s = 0;
+        if (R>0 && R<=WALL_CM) s +=  (WALL_CM - (int)R) * STEER_K;
+        if (L>0 && L<=WALL_CM) s += -(WALL_CM - (int)L) * STEER_K;
+
+        int side_near = min_nonzero((int)R, (int)L);
+        if (side_near>0 && side_near <= NEAR_BOOST_CM){
+            s *= STEER_BOOST;
+        }
+        final_steer = clamp(s, -80, +80);
+    }
+    
+    steer = final_steer;
+
+    /* 5) 최종 적용 */
+    go_forward_curved();
+
+    /* 6) 디버깅 출력 */
+    static int dbg=0; if(++dbg>=10){ dbg=0;
+        const char* pattern_names[] = {"직선", "좌곡선", "우곡선", "시작종료"};
+        const char* current_pattern = (cnn_pattern >= 0 && cnn_pattern < 4) ? 
+                                    pattern_names[cnn_pattern] : "알수없음";
+        
+        if (cnn_active) {
+            xil_printf("[AUTO+CNN] F=%lu R=%lu L=%lu | SPD=%d STEER=%d | CNN=%d(%s) TO=%d\r\n",
+                       (unsigned long)F, (unsigned long)R, (unsigned long)L,
+                       speed_pct, steer, (int)last_cnn_result, current_pattern, cnn_timeout_count);
+        } else {
+            xil_printf("[AUTO] F=%lu R=%lu L=%lu | SPD=%d STEER=%d\r\n",
+                       (unsigned long)F, (unsigned long)R, (unsigned long)L,
+                       speed_pct, steer);
+        }
+    }
+}
+
+/* ================= C 파서 및 기타 함수들 (기존 유지) ================= */
 typedef struct { int state,s1,n1,got1,s2,n2,got2; } CParser;
 static CParser cp = {0, +1, 0, 0, +1, 0, 0};
 
@@ -391,154 +548,19 @@ static int handle_c_char(char c){
     }
 }
 
-/* ================= 초음파 읽기 ================= */
-static inline u32 ultra_read_once(u32 base){
-    u32 ones = Xil_In32(base + 0x00) & 0xF;
-    u32 tens = Xil_In32(base + 0x04) & 0xF;
-    return tens*10 + ones;
-}
-static u32 ultra_read_avg(u32 base, int n){
-    u32 sum=0, cnt=0;
-    for(int i=0;i<n;i++){
-        u32 v = ultra_read_once(base);
-        if(v>0 && v<=400){ sum+=v; cnt++; }
-        usleep(1000);
-    }
-    return (cnt? sum/cnt : 0);
+static void speed_step(int d){
+    auto_mode=0; cnn_active=0;
+    speed_pct += d;
+    if (speed_pct!=0) speed_pct = clamp(speed_pct,DUTY_MIN_TURN,DUTY_MAX);
+    else speed_pct = 0;
+    xil_printf("SPD=%d%%, STEER=%d\r\n",speed_pct,steer);
+    reapply_motion();
 }
 
-/* ================= CNN + 초음파 융합 자율주행 ================= */
-static void auto_step_with_cnn(void){
-    /* 1) 초음파 센서 읽기 */
-    u32 F = ultra_read_avg(UL_F, 3);
-    u32 R = ultra_read_avg(UL_R, 3);
-    u32 L = ultra_read_avg(UL_L, 3);
-
-    /* 2) 비상상황: 전방 근접 시 기존 로직 우선 */
-    if (F>0 && F<=PANIC_CM){
-        int left_more_space = (L >= R);
-
-        /* 후진 */
-        int save_spd = speed_pct, save_st = steer;
-        speed_pct = BACKUP_PCT;
-        steer = 0;
-        go_backward_curved();
-        usleep(BACKUP_MS * 1000);
-
-        /* 스핀 */
-        if (left_more_space) turn_left_spin();
-        else                 turn_right_spin();
-        for(int i=0;i<10 && auto_mode;i++) usleep(100000);
-
-        /* 전진 재개 */
-        speed_pct = AUTO_BASE_PCT;
-        steer = 0;
-        go_forward_curved();
-        return;
-    }
-
-    /* 3) 전방 감속 (기존 로직) */
-    if      (F>0 && F<FRONT_SLOW2_CM) speed_pct = FRONT_SLOW2_PCT;
-    else if (F>0 && F<FRONT_SLOW1_CM) speed_pct = FRONT_SLOW1_PCT;
-    else                              speed_pct = AUTO_BASE_PCT;
-
-    /* 4) 조향 결정: CNN vs 초음파 융합 */
-    int final_steer = 0;
-    
-    if (cnn_active) {
-        /* CNN 결과 읽기 */
-        s32 cnn_steer = cnn_read_steering_angle();
-        
-        if (cnn_steer != 0) {
-            /* CNN 결과 가공 */
-            int processed_cnn_steer = cnn_apply_steering_logic(cnn_steer);
-            last_cnn_result = processed_cnn_steer;
-            cnn_timeout_count = 0;
-            
-            /* 초음파 장애물 회피 */
-            int obstacle_steer = 0;
-            if (R>0 && R<=WALL_CM) obstacle_steer +=  (WALL_CM - (int)R) * STEER_K;
-            if (L>0 && L<=WALL_CM) obstacle_steer += -(WALL_CM - (int)L) * STEER_K;
-
-            int side_near = min_nonzero((int)R, (int)L);
-            if (side_near>0 && side_near <= NEAR_BOOST_CM){
-                obstacle_steer *= STEER_BOOST;
-            }
-            
-            /* 융합 제어 로직 */
-            if (abs(obstacle_steer) > 20) {
-                /* 강한 장애물 신호 → 초음파 우선 */
-                final_steer = clamp(obstacle_steer, -80, 80);
-            } else if (abs(obstacle_steer) > 10) {
-                /* 중간 장애물 신호 → 가중 평균 */
-                final_steer = clamp((obstacle_steer * 2 + processed_cnn_steer) / 3, -80, 80);
-            } else {
-                /* 장애물 없음 → CNN 차선 추종 */
-                final_steer = clamp(processed_cnn_steer, -80, 80);
-            }
-            
-        } else {
-            /* CNN 결과 없음 → 타임아웃 처리 */
-            cnn_timeout_count++;
-            if (cnn_timeout_count > 10) {  /* 200ms (20ms * 10) 타임아웃 */
-                /* CNN 타임아웃 → 초음파만으로 처리 */
-                int s = 0;
-                if (R>0 && R<=WALL_CM) s +=  (WALL_CM - (int)R) * STEER_K;
-                if (L>0 && L<=WALL_CM) s += -(WALL_CM - (int)L) * STEER_K;
-                
-                int side_near = min_nonzero((int)R, (int)L);
-                if (side_near>0 && side_near <= NEAR_BOOST_CM){
-                    s *= STEER_BOOST;
-                }
-                final_steer = clamp(s, -80, +80);
-                
-                /* 마지막 CNN 결과 서서히 감소 */
-                last_cnn_result = last_cnn_result * 9 / 10;
-            } else {
-                /* 짧은 타임아웃 → 마지막 CNN 결과 유지 */
-                final_steer = last_cnn_result;
-            }
-        }
-    } else {
-        /* CNN 비활성 → 기존 초음파 로직 */
-        int s = 0;
-        if (R>0 && R<=WALL_CM) s +=  (WALL_CM - (int)R) * STEER_K;
-        if (L>0 && L<=WALL_CM) s += -(WALL_CM - (int)L) * STEER_K;
-
-        int side_near = min_nonzero((int)R, (int)L);
-        if (side_near>0 && side_near <= NEAR_BOOST_CM){
-            s *= STEER_BOOST;
-        }
-        final_steer = clamp(s, -80, +80);
-    }
-    
-    steer = final_steer;
-
-    /* 5) 최종 적용 */
-    go_forward_curved();
-
-    /* 6) 디버깅 출력 */
-    static int dbg=0; if(++dbg>=10){ dbg=0;
-        const char* pattern_names[] = {"직선", "좌곡선", "우곡선", "시작종료"};
-        const char* current_pattern = (cnn_pattern >= 0 && cnn_pattern < 4) ? 
-                                    pattern_names[cnn_pattern] : "알수없음";
-        
-        if (cnn_active) {
-            xil_printf("[AUTO+CNN] F=%lu R=%lu L=%lu | SPD=%d STEER=%d | CNN=%d(%s) TO=%d\r\n",
-                       (unsigned long)F, (unsigned long)R, (unsigned long)L,
-                       speed_pct, steer, (int)last_cnn_result, current_pattern, cnn_timeout_count);
-        } else {
-            xil_printf("[AUTO] F=%lu R=%lu L=%lu | SPD=%d STEER=%d\r\n",
-                       (unsigned long)F, (unsigned long)R, (unsigned long)L,
-                       speed_pct, steer);
-        }
-    }
-}
-
-/* ================= 도움말 ================= */
 static void print_help(void){
     xil_printf("\r\n[Keys] W/A/S/D, X=stop, Z=auto, Y=auto+CNN, +=spd+10, -=spd-10, C <pwm> <steer>\r\n");
-    xil_printf("[CNN] 4패턴 인식: 직선/좌곡선/우곡선/시작종료\r\n");
+    xil_printf("[CNN] AXI Lite 인터페이스, 4패턴 인식, SPI 입력\r\n");
+    xil_printf("[Commands] I=CNN상태, T=시스템테스트\r\n");
 }
 
 /* ================= main ================= */
@@ -546,19 +568,19 @@ int main(void)
 {
     init_platform();
     uart_flush_rx();
-    uart_puts("BT + CNN READY\r\n");
+    uart_puts("AXI Lite CNN READY\r\n");
     print_help();
 
-    /* CNN 초기화 */
+    /* CNN AXI Lite 초기화 */
     cnn_init();
 
-    /* PROBE */
-    u32 b4 = r32(REG_DIR);
-    w32(REG_DIR, 0x5);
-    u32 af = r32(REG_DIR);
+    /* PWM 프로브 */
+    u32 b4 = Xil_In32(PWM_BASE + REG_DIR);
+    Xil_Out32(PWM_BASE + REG_DIR, 0x5);
+    u32 af = Xil_In32(PWM_BASE + REG_DIR);
     xil_printf("[PROBE] DIR before=%08lx after=%08lx (ok if different)\r\n",
                (unsigned long)b4, (unsigned long)af);
-    w32(REG_DIR, b4);
+    Xil_Out32(PWM_BASE + REG_DIR, b4);
 
     stop_all();
     speed_pct = DUTY_MIN_MOVE;
@@ -583,7 +605,7 @@ int main(void)
             case 'Y': case 'y':
                 auto_mode=2; cnn_active=1; speed_pct=AUTO_BASE_PCT; steer=0;
                 go_forward_curved();
-                xil_printf("[AUTO+CNN] 융합모드: PWM %d%%\r\n", AUTO_BASE_PCT);
+                xil_printf("[AUTO+CNN] AXI Lite 융합모드: PWM %d%%\r\n", AUTO_BASE_PCT);
                 break;
             case 'W': case 'w': auto_mode=0; cnn_active=0; go_forward_curved();  break;
             case 'S': case 's': case 'R': case 'r': auto_mode=0; cnn_active=0; go_backward_curved(); break;
@@ -592,6 +614,11 @@ int main(void)
             case 'X': case 'x': case ' ': stop_all(); xil_printf("STOP\r\n"); break;
             case '+': speed_step(+10); break;
             case '-': speed_step(-10); break;
+            case 'I': case 'i': cnn_system_status(); break;  // CNN 상태 확인
+            case 'T': case 't':  // 시스템 테스트
+                xil_printf("[TEST] CNN AXI Lite 연결 테스트\r\n");
+                cnn_system_status();
+                break;
             default: break;
             }
         }
