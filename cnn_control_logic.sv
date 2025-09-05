@@ -11,11 +11,11 @@ module cnn_control_logic_simple (
     output wire [31:0] frame_count_reg, // Frame count register
     output wire [31:0] error_code_reg,  // Error code register
     
-    // CNN Interface
+    // CNN Interface (INPUT ONLY - NO DRIVING)
     output wire cnn_start,              // Start CNN processing
     output wire cnn_reset,              // Reset CNN
     input wire cnn_busy,                // CNN is busy
-    input wire cnn_result_valid,        // CNN result valid
+    input wire cnn_result_valid,        // CNN result valid (INPUT ONLY)
     
     // Pixel Interface (MicroBlaze controlled)
     output wire pixel_valid,            // Valid pixel data
@@ -44,118 +44,111 @@ module cnn_control_logic_simple (
     reg [31:0] frame_count_internal;
     reg [31:0] error_code_internal;
     
-    // 입력 신호 격리 (이름 충돌 방지)
-    reg [31:0] ctrl_sync_stage1, ctrl_sync_stage2;
-    reg [31:0] pixel_sync_stage1, pixel_sync_stage2;
-    reg result_sync_stage1, result_sync_stage2, result_sync_stage3;
+    // 입력 신호만 동기화 (출력 신호는 절대 건드리지 않음)
+    reg [31:0] control_sync1, control_sync2;
+    reg [31:0] pixel_sync1, pixel_sync2;
     
-    // Edge detection (완전히 다른 이름)
-    reg start_edge_detect, reset_edge_detect, pixel_edge_detect;
-    reg frame_start_detect, frame_end_detect, result_done_detect;
+    // CNN 결과는 edge detection만 (재구동 절대 금지)
+    reg cnn_valid_prev1, cnn_valid_prev2;
+    wire cnn_valid_edge;
     
-    // 출력 드라이버 (완전 분리)
-    reg cnn_start_driver, cnn_reset_driver, pixel_valid_driver;
-    reg frame_start_driver, frame_complete_driver;
-    reg [7:0] pixel_data_driver;
+    // Control edge detection
+    wire start_cmd, reset_cmd, pixel_cmd, frame_start_cmd, frame_end_cmd;
+    
+    // 출력 레지스터들 (완전 분리된 이름)
+    reg output_cnn_start, output_cnn_reset, output_pixel_valid;
+    reg output_frame_start, output_frame_complete;
+    reg [7:0] output_pixel_data;
 
-    // ===== 안전한 입력 동기화 (Multiple Driver 방지) =====
+    // ===== 입력 신호 동기화만 (출력은 절대 건드리지 않음) =====
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            ctrl_sync_stage1 <= 32'h0;
-            ctrl_sync_stage2 <= 32'h0;
-            pixel_sync_stage1 <= 32'h0;
-            pixel_sync_stage2 <= 32'h0;
-            result_sync_stage1 <= 1'b0;
-            result_sync_stage2 <= 1'b0;
-            result_sync_stage3 <= 1'b0;
+            control_sync1 <= 32'h0;
+            control_sync2 <= 32'h0;
+            pixel_sync1 <= 32'h0;
+            pixel_sync2 <= 32'h0;
+            cnn_valid_prev1 <= 1'b0;
+            cnn_valid_prev2 <= 1'b0;
         end else begin
-            // 입력 신호를 완전히 다른 이름으로 캡처
-            ctrl_sync_stage1 <= control_reg;
-            ctrl_sync_stage2 <= ctrl_sync_stage1;
+            // Control register 동기화
+            control_sync1 <= control_reg;
+            control_sync2 <= control_sync1;
             
-            pixel_sync_stage1 <= pixel_reg;
-            pixel_sync_stage2 <= pixel_sync_stage1;
+            // Pixel register 동기화
+            pixel_sync1 <= pixel_reg;
+            pixel_sync2 <= pixel_sync1;
             
-            // CNN 결과 신호도 완전히 다른 이름으로
-            result_sync_stage1 <= cnn_result_valid;
-            result_sync_stage2 <= result_sync_stage1;
-            result_sync_stage3 <= result_sync_stage2;
+            // CNN result valid는 edge detection만 (재구동 금지)
+            cnn_valid_prev1 <= cnn_result_valid;
+            cnn_valid_prev2 <= cnn_valid_prev1;
         end
     end
 
-    // ===== Edge Detection (조합 논리 최소화) =====
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            start_edge_detect <= 1'b0;
-            reset_edge_detect <= 1'b0;
-            pixel_edge_detect <= 1'b0;
-            frame_start_detect <= 1'b0;
-            frame_end_detect <= 1'b0;
-            result_done_detect <= 1'b0;
-        end else begin
-            start_edge_detect <= ctrl_sync_stage2[CTRL_CNN_START] & ~ctrl_sync_stage1[CTRL_CNN_START];
-            reset_edge_detect <= ctrl_sync_stage2[CTRL_CNN_RESET] & ~ctrl_sync_stage1[CTRL_CNN_RESET];
-            pixel_edge_detect <= ctrl_sync_stage2[CTRL_PIXEL_VALID] & ~ctrl_sync_stage1[CTRL_PIXEL_VALID];
-            frame_start_detect <= ctrl_sync_stage2[CTRL_FRAME_START] & ~ctrl_sync_stage1[CTRL_FRAME_START];
-            frame_end_detect <= ctrl_sync_stage2[CTRL_FRAME_COMPLETE] & ~ctrl_sync_stage1[CTRL_FRAME_COMPLETE];
-            result_done_detect <= result_sync_stage3 & ~result_sync_stage2;
-        end
-    end
+    // ===== Edge Detection (조합 논리) =====
+    assign start_cmd = control_sync2[CTRL_CNN_START] & ~control_sync1[CTRL_CNN_START];
+    assign reset_cmd = control_sync2[CTRL_CNN_RESET] & ~control_sync1[CTRL_CNN_RESET];
+    assign pixel_cmd = control_sync2[CTRL_PIXEL_VALID] & ~control_sync1[CTRL_PIXEL_VALID];
+    assign frame_start_cmd = control_sync2[CTRL_FRAME_START] & ~control_sync1[CTRL_FRAME_START];
+    assign frame_end_cmd = control_sync2[CTRL_FRAME_COMPLETE] & ~control_sync1[CTRL_FRAME_COMPLETE];
+    assign cnn_valid_edge = cnn_valid_prev1 & ~cnn_valid_prev2;
 
-    // ===== Control Logic =====
+    // ===== Internal Logic =====
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             frame_count_internal <= 32'h0;
             error_code_internal <= ERROR_NONE;
         end else begin
-            if (reset_edge_detect) begin
+            if (reset_cmd) begin
                 error_code_internal <= ERROR_NONE;
             end
             
-            if (result_done_detect) begin
+            if (cnn_valid_edge) begin
                 frame_count_internal <= frame_count_internal + 1;
             end
         end
     end
 
-    // ===== 출력 드라이버 (Multiple Driver 방지) =====
+    // ===== 출력 생성 (완전 분리) =====
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            cnn_start_driver <= 1'b0;
-            cnn_reset_driver <= 1'b0;
-            pixel_valid_driver <= 1'b0;
-            pixel_data_driver <= 8'h0;
-            frame_start_driver <= 1'b0;
-            frame_complete_driver <= 1'b0;
+            output_cnn_start <= 1'b0;
+            output_cnn_reset <= 1'b0;
+            output_pixel_valid <= 1'b0;
+            output_pixel_data <= 8'h0;
+            output_frame_start <= 1'b0;
+            output_frame_complete <= 1'b0;
         end else begin
-            cnn_start_driver <= start_edge_detect;
-            cnn_reset_driver <= reset_edge_detect;
-            pixel_valid_driver <= pixel_edge_detect;
-            pixel_data_driver <= pixel_sync_stage2[7:0];
-            frame_start_driver <= frame_start_detect;
-            frame_complete_driver <= frame_end_detect;
+            // Pulse signals (1 cycle only)
+            output_cnn_start <= start_cmd;
+            output_cnn_reset <= reset_cmd;
+            output_pixel_valid <= pixel_cmd;
+            output_frame_start <= frame_start_cmd;
+            output_frame_complete <= frame_end_cmd;
+            
+            // Data signal (stable)
+            output_pixel_data <= pixel_sync2[7:0];
         end
     end
 
-    // ===== 최종 출력 할당 (단일 Driver 보장) =====
-    assign cnn_start = cnn_start_driver;
-    assign cnn_reset = cnn_reset_driver;
-    assign pixel_valid = pixel_valid_driver;
-    assign pixel_data = pixel_data_driver;
-    assign frame_start = frame_start_driver;
-    assign frame_complete = frame_complete_driver;
+    // ===== 최종 출력 (단일 드라이버) =====
+    assign cnn_start = output_cnn_start;
+    assign cnn_reset = output_cnn_reset;
+    assign pixel_valid = output_pixel_valid;
+    assign pixel_data = output_pixel_data;
+    assign frame_start = output_frame_start;
+    assign frame_complete = output_frame_complete;
     
-    // Status register (읽기 전용, Driver 충돌 없음)
+    // Status register (읽기 전용, 절대 구동하지 않음)
     assign status_reg = {
         27'b0,                    // Reserved [31:5]
-        frame_complete_driver,    // FRAME_COMPLETE [4]
-        frame_start_driver,       // FRAME_START [3]
-        pixel_valid_driver,       // PIXEL_VALID [2]
-        result_sync_stage3,       // RESULT_VALID [1]
-        cnn_busy                  // CNN_BUSY [0]
+        output_frame_complete,    // FRAME_COMPLETE [4]
+        output_frame_start,       // FRAME_START [3]
+        output_pixel_valid,       // PIXEL_VALID [2]
+        cnn_result_valid,         // RESULT_VALID [1] - 원본 사용 (재구동 금지)
+        cnn_busy                  // CNN_BUSY [0] - 원본 사용 (재구동 금지)
     };
     
-    // Counter outputs (읽기 전용)
+    // Counter outputs
     assign frame_counter = frame_count_internal;
     assign error_code = error_code_internal;
     assign frame_count_reg = frame_count_internal;
