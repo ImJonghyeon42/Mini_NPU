@@ -75,7 +75,8 @@ module myip_CNN_v1_0 #
 		.pixel_valid(pixel_valid),
 		.pixel_in(pixel_data),
 		.final_result_valid(cnn_result_valid),
-		.final_lane_result(cnn_result)
+		.final_lane_result(cnn_result),
+		.cnn_busy(cnn_busy)
 	);
 
 	// ===== Control Logic (픽셀 처리 복원) =====
