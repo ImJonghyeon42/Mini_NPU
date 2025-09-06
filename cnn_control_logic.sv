@@ -11,11 +11,11 @@ module cnn_control_logic_simple (
     output wire [31:0] frame_count_reg, // Frame count register
     output wire [31:0] error_code_reg,  // Error code register
     
-    // CNN Interface (INPUT ONLY - NO DRIVING)
+    // CNN Interface
     output wire cnn_start,              // Start CNN processing
     output wire cnn_reset,              // Reset CNN
     input wire cnn_busy,                // CNN is busy
-    input wire cnn_result_valid,        // CNN result valid (INPUT ONLY)
+    input wire cnn_result_valid,        // CNN result valid
     
     // Pixel Interface (MicroBlaze controlled)
     output wire pixel_valid,            // Valid pixel data
@@ -44,93 +44,65 @@ module cnn_control_logic_simple (
     reg [31:0] frame_count_internal;
     reg [31:0] error_code_internal;
     
-    // 입력 신호만 동기화 (출력 신호는 절대 건드리지 않음)
-    reg [31:0] control_sync1, control_sync2;
-    reg [31:0] pixel_sync1, pixel_sync2;
+    // 이전 상태 저장용 레지스터들 (조합 논리 루프 방지)
+    reg [31:0] control_reg_prev;
+    reg [31:0] pixel_reg_prev;
+    reg cnn_result_valid_prev;
     
-    // CNN 결과는 edge detection만 (재구동 절대 금지)
-    reg cnn_valid_prev1, cnn_valid_prev2;
-    wire cnn_valid_edge;
-    
-    // Control edge detection
-    wire start_cmd, reset_cmd, pixel_cmd, frame_start_cmd, frame_end_cmd;
-    
-    // 출력 레지스터들 (완전 분리된 이름)
-    reg output_cnn_start, output_cnn_reset, output_pixel_valid;
-    reg output_frame_start, output_frame_complete;
+    // 출력 레지스터들
+    reg output_cnn_start;
+    reg output_cnn_reset;
+    reg output_pixel_valid;
+    reg output_frame_start;
+    reg output_frame_complete;
     reg [7:0] output_pixel_data;
 
-    // ===== 입력 신호 동기화만 (출력은 절대 건드리지 않음) =====
+    // ===== 순차 논리로만 구현 (조합 논리 루프 방지) =====
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            control_sync1 <= 32'h0;
-            control_sync2 <= 32'h0;
-            pixel_sync1 <= 32'h0;
-            pixel_sync2 <= 32'h0;
-            cnn_valid_prev1 <= 1'b0;
-            cnn_valid_prev2 <= 1'b0;
-        end else begin
-            // Control register 동기화
-            control_sync1 <= control_reg;
-            control_sync2 <= control_sync1;
-            
-            // Pixel register 동기화
-            pixel_sync1 <= pixel_reg;
-            pixel_sync2 <= pixel_sync1;
-            
-            // CNN result valid는 edge detection만 (재구동 금지)
-            cnn_valid_prev1 <= cnn_result_valid;
-            cnn_valid_prev2 <= cnn_valid_prev1;
-        end
-    end
-
-    // ===== Edge Detection (조합 논리) =====
-    assign start_cmd = control_sync2[CTRL_CNN_START] & ~control_sync1[CTRL_CNN_START];
-    assign reset_cmd = control_sync2[CTRL_CNN_RESET] & ~control_sync1[CTRL_CNN_RESET];
-    assign pixel_cmd = control_sync2[CTRL_PIXEL_VALID] & ~control_sync1[CTRL_PIXEL_VALID];
-    assign frame_start_cmd = control_sync2[CTRL_FRAME_START] & ~control_sync1[CTRL_FRAME_START];
-    assign frame_end_cmd = control_sync2[CTRL_FRAME_COMPLETE] & ~control_sync1[CTRL_FRAME_COMPLETE];
-    assign cnn_valid_edge = cnn_valid_prev1 & ~cnn_valid_prev2;
-
-    // ===== Internal Logic =====
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+            // 초기화
+            control_reg_prev <= 32'h0;
+            pixel_reg_prev <= 32'h0;
+            cnn_result_valid_prev <= 1'b0;
             frame_count_internal <= 32'h0;
             error_code_internal <= ERROR_NONE;
-        end else begin
-            if (reset_cmd) begin
-                error_code_internal <= ERROR_NONE;
-            end
             
-            if (cnn_valid_edge) begin
-                frame_count_internal <= frame_count_internal + 1;
-            end
-        end
-    end
-
-    // ===== 출력 생성 (완전 분리) =====
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
+            // 출력 초기화
             output_cnn_start <= 1'b0;
             output_cnn_reset <= 1'b0;
             output_pixel_valid <= 1'b0;
-            output_pixel_data <= 8'h0;
             output_frame_start <= 1'b0;
             output_frame_complete <= 1'b0;
+            output_pixel_data <= 8'h0;
         end else begin
-            // Pulse signals (1 cycle only)
-            output_cnn_start <= start_cmd;
-            output_cnn_reset <= reset_cmd;
-            output_pixel_valid <= pixel_cmd;
-            output_frame_start <= frame_start_cmd;
-            output_frame_complete <= frame_end_cmd;
+            // Edge detection and pulse generation
+            output_cnn_start <= control_reg[CTRL_CNN_START] & ~control_reg_prev[CTRL_CNN_START];
+            output_cnn_reset <= control_reg[CTRL_CNN_RESET] & ~control_reg_prev[CTRL_CNN_RESET];
+            output_pixel_valid <= control_reg[CTRL_PIXEL_VALID] & ~control_reg_prev[CTRL_PIXEL_VALID];
+            output_frame_start <= control_reg[CTRL_FRAME_START] & ~control_reg_prev[CTRL_FRAME_START];
+            output_frame_complete <= control_reg[CTRL_FRAME_COMPLETE] & ~control_reg_prev[CTRL_FRAME_COMPLETE];
             
-            // Data signal (stable)
-            output_pixel_data <= pixel_sync2[7:0];
+            // Pixel data update
+            output_pixel_data <= pixel_reg[7:0];
+            
+            // Reset error on reset command
+            if (control_reg[CTRL_CNN_RESET] & ~control_reg_prev[CTRL_CNN_RESET]) begin
+                error_code_internal <= ERROR_NONE;
+            end
+            
+            // Frame counter increment on CNN result valid edge
+            if (cnn_result_valid & ~cnn_result_valid_prev) begin
+                frame_count_internal <= frame_count_internal + 1;
+            end
+            
+            // Previous state update (at the end to avoid combinational loops)
+            control_reg_prev <= control_reg;
+            pixel_reg_prev <= pixel_reg;
+            cnn_result_valid_prev <= cnn_result_valid;
         end
     end
 
-    // ===== 최종 출력 (단일 드라이버) =====
+    // ===== 출력 할당 (단순 wire 연결) =====
     assign cnn_start = output_cnn_start;
     assign cnn_reset = output_cnn_reset;
     assign pixel_valid = output_pixel_valid;
@@ -138,14 +110,14 @@ module cnn_control_logic_simple (
     assign frame_start = output_frame_start;
     assign frame_complete = output_frame_complete;
     
-    // Status register (읽기 전용, 절대 구동하지 않음)
+    // Status register (조합 논리)
     assign status_reg = {
         27'b0,                    // Reserved [31:5]
         output_frame_complete,    // FRAME_COMPLETE [4]
         output_frame_start,       // FRAME_START [3]
         output_pixel_valid,       // PIXEL_VALID [2]
-        cnn_result_valid,         // RESULT_VALID [1] - 원본 사용 (재구동 금지)
-        cnn_busy                  // CNN_BUSY [0] - 원본 사용 (재구동 금지)
+        cnn_result_valid,         // RESULT_VALID [1]
+        cnn_busy                  // CNN_BUSY [0]
     };
     
     // Counter outputs
