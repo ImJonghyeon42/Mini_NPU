@@ -159,16 +159,12 @@ module CNN_TOP(
             if (fc_result_valid && current_state == ST_FC_PROCESS) begin
                 final_result_reg <= fc_result_data;
                 final_result_valid_reg <= 1'b1;
-                $display("[CNN_TOP] 정상 FC 결과: %0d (0x%016h)", 
-                        $signed(fc_result_data), fc_result_data);
             end
             
             // 타임아웃으로 강제 완료 (디버그용)
             else if (current_state == ST_FC_PROCESS && next_state == ST_RESULT_HOLD && !fc_result_valid) begin
                 final_result_reg <= {16'hDEAD, 16'hBEEF, pixel_counter[15:0]};
                 final_result_valid_reg <= 1'b1;
-                $display("[CNN_TOP] 타임아웃 결과: 픽셀=%d, 피처=%d", 
-                        pixel_counter, feature_counter);
             end
             
             // IDLE로 돌아가면 valid 해제
@@ -206,41 +202,5 @@ module CNN_TOP(
     assign cnn_busy = (current_state != ST_IDLE);
     assign final_result_valid = final_result_valid_reg;
     assign final_lane_result = final_result_reg;
-    
-    // ===== 디버깅 출력 =====
-    always @(posedge clk) begin
-        // 상태 변화 로깅
-        if (current_state != next_state) begin
-            case(next_state)
-                ST_IDLE: 
-                    $display("[CNN_TOP] -> IDLE (총 픽셀: %d, 피처: %d)", 
-                            pixel_counter, feature_counter);
-                ST_FEATURE_EXTRACT: 
-                    $display("[CNN_TOP] -> FEATURE_EXTRACT 시작");
-                ST_WAIT_BUFFER: 
-                    $display("[CNN_TOP] -> WAIT_BUFFER (픽셀: %d, 피처: %d)", 
-                            pixel_counter, feature_counter);
-                ST_FC_PROCESS: 
-                    $display("[CNN_TOP] -> FC_PROCESS (buffer_full: %b)", 
-                            flattened_buffer_full);
-                ST_RESULT_HOLD: 
-                    $display("[CNN_TOP] -> RESULT_HOLD");
-            endcase
-        end
-        
-        // FC 시작 로깅
-        if (fc_start_pulse) begin
-            $display("[CNN_TOP] FC 시작 펄스! (피처 수: %d)", feature_counter);
-        end
-        
-        // 진행 상황 로깅 (간소화)
-        if (pixel_valid && pixel_counter % 256 == 0) begin
-            $display("[CNN_TOP] 픽셀 진행: %d/1024", pixel_counter);
-        end
-        
-        if (feature_valid && feature_counter % 50 == 0) begin
-            $display("[CNN_TOP] 피처 진행: %d/225", feature_counter);
-        end
-    end
     
 endmodule

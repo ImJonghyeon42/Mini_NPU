@@ -34,16 +34,6 @@ module Fully_Connected_Layer(
 	
 	// 결과 유지용 카운터 (16클럭 동안 유지)
 	logic [4:0] result_hold_counter;
-	
-	// ===== Weight ROM 초기화 =====
-	initial begin
-		$readmemh("weight.mem", weight_ROM);
-		$display("--- [FC_DEBUG] Weight ROM 로딩 완료 ---");
-		$display("--- [FC_DEBUG] weight_ROM[0] = 0x%h", weight_ROM[0]);
-		$display("--- [FC_DEBUG] weight_ROM[1] = 0x%h", weight_ROM[1]);
-		$display("--- [FC_DEBUG] weight_ROM[224] = 0x%h", weight_ROM[224]);
-		$display("--------------------------------------");
-	end
 
 	// ===== MAC Unit =====
 	MAC_unit MAC(
@@ -119,7 +109,6 @@ module Fully_Connected_Layer(
 						mac_valid <= 1'b1;
 						valid_out_cnt <= 8'h0;
 						state <= COMPUTE;
-						$display("[FC_DEBUG] FC 연산 시작");
 					end
 				end
 				
@@ -128,18 +117,12 @@ module Fully_Connected_Layer(
 					if(mac_sum_out_valid) begin
 						accumulator_reg <= mac_sum_out;
 						valid_out_cnt <= valid_out_cnt + 1'b1;
-						
-						// 디버깅: 처음 5개와 마지막 5개만 출력
-						if (valid_out_cnt < 5 || valid_out_cnt >= 220) begin
-							$display("[FC_DEBUG] MAC[%0d]: acc = %0d", valid_out_cnt, mac_sum_out);
-						end
 					end
 					
 					// 모든 가중치 처리 완료?
 					if(mac_cnt == 224) begin
 						state <= FLUSH;
 						mac_valid <= 1'b0;
-						$display("[FC_DEBUG] COMPUTE 완료, FLUSH로 이동");
 					end else begin
 						mac_cnt <= mac_cnt + 1'b1;
 						mac_valid <= 1'b1;
@@ -153,7 +136,6 @@ module Fully_Connected_Layer(
 					if(mac_sum_out_valid) begin
 						accumulator_reg <= mac_sum_out;
 						valid_out_cnt <= valid_out_cnt + 1'b1;
-						$display("[FC_DEBUG] FLUSH: 최종 결과 = %0d", mac_sum_out);
 					end
 					
 					// 모든 MAC 출력 완료?
@@ -161,7 +143,6 @@ module Fully_Connected_Layer(
 						state <= RESULT_VALID;
 						result_hold_counter <= 5'h0;
 						o_result_valid <= 1'b1;
-						$display("[FC_DEBUG] *** FC 연산 완료! 최종 결과 = %0d ***", accumulator_reg);
 					end
 				end
 				
@@ -172,7 +153,6 @@ module Fully_Connected_Layer(
 					
 					if(result_hold_counter >= 15) begin
 						state <= DONE;
-						$display("[FC_DEBUG] 결과 유지 완료, DONE으로 이동");
 					end
 				end
 				
@@ -180,7 +160,6 @@ module Fully_Connected_Layer(
 					// 마지막 1클럭 더 유지 후 IDLE로
 					o_result_valid <= 1'b1;
 					state <= IDLE;
-					$display("[FC_DEBUG] FC 처리 완료, IDLE로 복귀");
 				end
 				
 				default: begin
@@ -193,19 +172,5 @@ module Fully_Connected_Layer(
 	// ===== 출력 할당 =====
 	assign mac_sum_in = accumulator_reg;
 	assign o_result_data = accumulator_reg;
-	
-	// ===== 추가 디버깅 =====
-	always @(posedge clk) begin
-		if (start_pulse) begin
-			$display("[FC_DEBUG] ===== FC Layer 시작 =====");
-			$display("[FC_DEBUG] 입력 데이터 샘플:");
-			$display("[FC_DEBUG] data[0] = %0d, data[1] = %0d", i_flattened_data[0], i_flattened_data[1]);
-			$display("[FC_DEBUG] data[223] = %0d, data[224] = %0d", i_flattened_data[223], i_flattened_data[224]);
-		end
-		
-		if (state == RESULT_VALID && result_hold_counter == 0) begin
-			$display("[FC_DEBUG] 결과 출력 시작: valid=%b, data=%0d", o_result_valid, o_result_data);
-		end
-	end
 	
 endmodule

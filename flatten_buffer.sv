@@ -24,7 +24,6 @@ always_ff @(posedge clk or negedge rst) begin
             
             if (write_ptr == BUFFER_SIZE - 1) begin
                 buffer_full_reg <= 1;
-                $display("--- [DEBUG] flatten_buffer: Buffer FULL");
             end else begin
                 write_ptr <= write_ptr + 1;
             end

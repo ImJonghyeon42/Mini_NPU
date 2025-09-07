@@ -149,19 +149,4 @@ module conv_engine_2d(
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);
 	
-	// 디버그 출력
-	always @(posedge clk) begin
-		if (state != next_state) begin
-			case(next_state)
-				IDLE: $display("[CONV] 상태: IDLE");
-				PROCESSING: $display("[CONV] 상태: PROCESSING");
-				DONE: $display("[CONV] 상태: DONE");
-			endcase
-		end
-		
-		if (result_valid) begin
-			$display("[CONV] 결과: %h (x=%d, y=%d)", result_out, cnt_x, cnt_y);
-		end
-	end
-	
 endmodule
