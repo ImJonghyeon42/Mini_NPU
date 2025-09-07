@@ -26,27 +26,27 @@ module conv_engine_2d(
 	logic	[$clog2(IMG_WIDTH) - 1 : 0] cnt_x;
 	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
 	
-	// Multiple Driver 문제 해결: valid_in을 조합 신호로만 사용
+	// Multiple Driver 臾몄젣 �빐寃�: valid_in�쓣 議고빀 �떊�샇濡쒕쭔 �궗�슜
 	logic	valid_in_comb;
 	logic	valid_d1, valid_d2, valid_d3, valid_d4, valid_d5;
 	
 	enum	logic	[1:0]	{IDLE, PROCESSING, DONE} state, next_state;
 	
 	genvar	i,	j;
-	generate
-		for(i = 0; i < KERNEL_SIZE; i = i + 1) begin
-			for(j = 0; j < KERNEL_SIZE; j = j + 1) begin
-				compute_unit MAC_INST(
-					.clk(clk), .rst(rst),
-					.pixel_a(pixel_window[i][j]),
-					.weight_b(kernel[i][j]),
-					.sum_out(mac_out[i][j])
-				);
-			end
-		end
-	endgenerate
+generate
+    for(i = 0; i < KERNEL_SIZE; i = i + 1) begin : gen_rows // 바깥쪽 루프에 이름 부여
+        for(j = 0; j < KERNEL_SIZE; j = j + 1) begin : gen_cols // 안쪽 루프에 이름 부여
+            compute_unit MAC_INST(
+                .clk(clk), .rst(rst),
+                .pixel_a(pixel_window[i][j]),
+                .weight_b(kernel[i][j]),
+                .sum_out(mac_out[i][j])
+            );
+        end
+    end
+endgenerate
 	
-	// 픽셀 윈도우 업데이트
+	// �뵿�� �쐢�룄�슦 �뾽�뜲�씠�듃
 	always_ff@(posedge clk or negedge rst) begin 
 		if(!rst) begin  
 			line_buffer1 <= '{default: '0};
@@ -68,7 +68,7 @@ module conv_engine_2d(
 		end
 	end
 	
-	// 파이프라인 계산
+	// �뙆�씠�봽�씪�씤 怨꾩궛
 	always_ff@(posedge clk or negedge rst) begin
 		if(!rst) begin 
 			sum_stage1 <= '{default: '0};
@@ -93,7 +93,7 @@ module conv_engine_2d(
 		end
 	end
 	
-	// 상태 머신
+	// �긽�깭 癒몄떊
 	always_ff@(posedge clk or negedge rst) begin  
 		if(!rst) state <= IDLE; 
 		else state <= next_state;
@@ -108,7 +108,7 @@ module conv_engine_2d(
 		endcase
 	end
 	
-	// 픽셀 카운터
+	// �뵿�� 移댁슫�꽣
 	always_ff@(posedge clk or negedge rst) begin 
 		if(!rst) begin 
 			cnt_x <= '0;
@@ -124,10 +124,10 @@ module conv_engine_2d(
 		end
 	end
 	
-	// Valid 신호 생성 (조합 로직으로만)
+	// Valid �떊�샇 �깮�꽦 (議고빀 濡쒖쭅�쑝濡쒕쭔)
 	assign valid_in_comb = (state == PROCESSING) && (cnt_x >= 2) && (cnt_y >= 2);
 	
-	// Valid 파이프라인 (순차 로직)
+	// Valid �뙆�씠�봽�씪�씤 (�닚李� 濡쒖쭅)
 	always_ff @(posedge clk or negedge rst) begin 
         if (!rst) begin  
             valid_d1 <= 1'b0;
@@ -136,7 +136,7 @@ module conv_engine_2d(
             valid_d4 <= 1'b0;
 			valid_d5 <= 1'b0;
         end else begin
-            valid_d1 <= valid_in_comb;  // 조합 신호 사용
+            valid_d1 <= valid_in_comb;  // 議고빀 �떊�샇 �궗�슜
             valid_d2 <= valid_d1;
             valid_d3 <= valid_d2;
 			valid_d4 <= valid_d3;
@@ -144,7 +144,7 @@ module conv_engine_2d(
         end
     end
 	
-	// 출력 할당
+	// 異쒕젰 �븷�떦
 	assign result_valid = valid_d5;
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);

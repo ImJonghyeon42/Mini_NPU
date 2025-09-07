@@ -1,5 +1,3 @@
-// ===== 간소화된 IP 래퍼 (빠른 구현, 테스트벤치 불필요) =====
-
 module IP_CNN_System_Fast(
     input logic clk,
     input logic rst_n,
@@ -50,47 +48,43 @@ module IP_CNN_System_Fast(
     logic [31:0] slave_tx_data_reg;
     logic slave_tx_valid;
     
-    axi_quad_spi_0 spi_slave_ip (
-        .ext_spi_clk(spi_slave_sclk),
-        .s_axi4_aclk(clk),
-        .s_axi4_aresetn(rst_n),
-        
-        // SPI 핀들 (기존 설정)
-        .sck_i(spi_slave_sclk),
-        .sck_o(),
-        .sck_t(),
-        .mosi_i(spi_slave_mosi),
-        .mosi_o(),
-        .mosi_t(),
-        .miso_i(1'b0),
-        .miso_o(spi_slave_miso),
-        .miso_t(),
-        .ss_i(spi_slave_ss),
-        .ss_o(),
-        .ss_t(),
-        
-        // 최소한의 AXI 연결 (나머지는 기본값)
-        .s_axi4_araddr(32'h0),
-        .s_axi4_arvalid(1'b0),
-        .s_axi4_arready(),
-        .s_axi4_rdata(slave_rx_data_reg),
-        .s_axi4_rvalid(slave_rx_valid),
-        .s_axi4_rready(1'b1),
-        .s_axi4_rresp(),
-        
-        .s_axi4_awaddr(32'h0),
-        .s_axi4_awvalid(1'b0),
-        .s_axi4_awready(),
-        .s_axi4_wdata(slave_tx_data_reg),
-        .s_axi4_wvalid(slave_tx_valid),
-        .s_axi4_wready(),
-        .s_axi4_wstrb(4'hF),
-        .s_axi4_bresp(),
-        .s_axi4_bvalid(),
-        .s_axi4_bready(1'b1),
-        
-        .ip2intc_irpt()
-    );
+   axi_quad_spi_0 spi_slave_ip (
+    .ext_spi_clk(spi_slave_sclk),
+    .s_axi_aclk(clk),
+    .s_axi_aresetn(rst_n),
+    
+    // SPI 핀들
+    .sck_i(spi_slave_sclk),
+    .sck_o(),
+    .io0_i(spi_slave_mosi), // mosi_i -> io0_i
+    .io0_o(),
+    .io1_i(1'b0), // miso_i -> io1_i
+    .io1_o(spi_slave_miso),
+    .ss_i(spi_slave_ss),
+    .ss_o(),
+    
+    // AXI Lite 연결
+    .s_axi_araddr(7'h0), // 주소 폭(width)을 IP 정의에 맞게 7비트로 수정
+    .s_axi_arvalid(1'b0),
+    .s_axi_arready(),
+    .s_axi_rdata(slave_rx_data_reg),
+    .s_axi_rvalid(slave_rx_valid),
+    .s_axi_rready(1'b1),
+    .s_axi_rresp(),
+    
+    .s_axi_awaddr(7'h0), // 주소 폭(width)을 IP 정의에 맞게 7비트로 수정
+    .s_axi_awvalid(1'b0),
+    .s_axi_awready(),
+    .s_axi_wdata(slave_tx_data_reg),
+    .s_axi_wvalid(slave_tx_valid),
+    .s_axi_wready(),
+    .s_axi_wstrb(4'hF),
+    .s_axi_bresp(),
+    .s_axi_bvalid(),
+    .s_axi_bready(1'b1),
+    
+    .ip2intc_irpt()
+);
     
     // SPI MASTER IP  
     logic [31:0] master_tx_data_reg;
@@ -98,46 +92,38 @@ module IP_CNN_System_Fast(
     logic master_tx_ready;
     
     axi_quad_spi_1 spi_master_ip (
-        .ext_spi_clk(clk),
-        .s_axi4_aclk(clk),
-        .s_axi4_aresetn(rst_n),
-        
-        // SPI 핀들 (기존 설정)
-        .sck_i(1'b0),
-        .sck_o(spi_master_sclk),
-        .sck_t(),
-        .mosi_i(1'b0),
-        .mosi_o(spi_master_mosi),
-        .mosi_t(),
-        .miso_i(spi_master_miso),
-        .miso_o(),
-        .miso_t(),
-        .ss_i(1'b1),
-        .ss_o(spi_master_ss),
-        .ss_t(),
-        
-        // 최소한의 AXI 연결
-        .s_axi4_araddr(32'h0),
-        .s_axi4_arvalid(1'b0),
-        .s_axi4_arready(),
-        .s_axi4_rdata(),
-        .s_axi4_rvalid(),
-        .s_axi4_rready(1'b1),
-        .s_axi4_rresp(),
-        
-        .s_axi4_awaddr(32'h0),
-        .s_axi4_awvalid(1'b0),
-        .s_axi4_awready(),
-        .s_axi4_wdata(master_tx_data_reg),
-        .s_axi4_wvalid(master_tx_valid),
-        .s_axi4_wready(master_tx_ready),
-        .s_axi4_wstrb(4'hF),
-        .s_axi4_bresp(),
-        .s_axi4_bvalid(),
-        .s_axi4_bready(1'b1),
-        
-        .ip2intc_irpt()
-    );
+    .ext_spi_clk(clk), // Master는 보통 내부 클럭을 사용합니다.
+    .s_axi_aclk(clk),
+    .s_axi_aresetn(rst_n),
+    
+    // SPI 핀들
+    .sck_o(spi_master_sclk),
+    .io0_o(spi_master_mosi), // mosi_o -> io0_o
+    .io1_i(spi_master_miso), // miso_i -> io1_i
+    .ss_o(spi_master_ss),
+    
+    // AXI Lite 연결
+    .s_axi_araddr(7'h0),
+    .s_axi_arvalid(1'b0),
+    .s_axi_arready(),
+    .s_axi_rdata(),
+    .s_axi_rvalid(),
+    .s_axi_rready(1'b1),
+    .s_axi_rresp(),
+    
+    .s_axi_awaddr(7'h0),
+    .s_axi_awvalid(1'b0),
+    .s_axi_awready(),
+    .s_axi_wdata(master_tx_data_reg),
+    .s_axi_wvalid(master_tx_valid),
+    .s_axi_wready(master_tx_ready),
+    .s_axi_wstrb(4'hF),
+    .s_axi_bresp(),
+    .s_axi_bvalid(),
+    .s_axi_bready(1'b1),
+    
+    .ip2intc_irpt()
+);
 
     // ===== CNN 엔진 (수정된 버전) =====
     CNN_TOP_Improved cnn_engine (
