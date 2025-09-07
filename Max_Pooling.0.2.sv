@@ -122,7 +122,7 @@ module Max_Pooling(
     
     always @(posedge clk) begin
         if (result_valid && output_y < 2) begin
-            $display("BLOCK_POOL[%0t]: out(%0d,%0d) block=[%h,%h,%h,%h] → max=%h", 
+            $display("BLOCK_POOL[%0t]: out(%0d,%0d) block=[%h,%h,%h,%h] �넂 max=%h", 
                      $time, output_x, output_y, 
                      block_00, block_01, block_10, block_11, block_max);
         end

@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module conv_engine_2d(
 	input	logic	clk,
-	input	logic	rst,
+	input	logic	rst,   // Active Low (negedge)
 	input	logic	start_signal,
 	input	logic	[7:0]	pixel_in,
 	input	logic	pixel_valid,
@@ -25,7 +25,10 @@ module conv_engine_2d(
 	logic	signed	[21 : 0] final_result;
 	logic	[$clog2(IMG_WIDTH) - 1 : 0] cnt_x;
 	logic	[$clog2(IMG_HEIGHT)  - 1 : 0] cnt_y;
-	logic	valid_in,valid_d1,valid_d2,valid_d3,valid_d4,valid_d5;
+	
+	// Multiple Driver 문제 해결: valid_in을 조합 신호로만 사용
+	logic	valid_in_comb;
+	logic	valid_d1, valid_d2, valid_d3, valid_d4, valid_d5;
 	
 	enum	logic	[1:0]	{IDLE, PROCESSING, DONE} state, next_state;
 	
@@ -43,6 +46,7 @@ module conv_engine_2d(
 		end
 	endgenerate
 	
+	// 픽셀 윈도우 업데이트
 	always_ff@(posedge clk or negedge rst) begin 
 		if(!rst) begin  
 			line_buffer1 <= '{default: '0};
@@ -63,7 +67,8 @@ module conv_engine_2d(
 			pixel_window[0][2] <= line_buffer2[cnt_x];	
 		end
 	end
-		
+	
+	// 파이프라인 계산
 	always_ff@(posedge clk or negedge rst) begin
 		if(!rst) begin 
 			sum_stage1 <= '{default: '0};
@@ -88,6 +93,7 @@ module conv_engine_2d(
 		end
 	end
 	
+	// 상태 머신
 	always_ff@(posedge clk or negedge rst) begin  
 		if(!rst) state <= IDLE; 
 		else state <= next_state;
@@ -102,6 +108,7 @@ module conv_engine_2d(
 		endcase
 	end
 	
+	// 픽셀 카운터
 	always_ff@(posedge clk or negedge rst) begin 
 		if(!rst) begin 
 			cnt_x <= '0;
@@ -117,8 +124,10 @@ module conv_engine_2d(
 		end
 	end
 	
-	assign valid_in = (state == PROCESSING) && (cnt_x >= 2) && (cnt_y >= 2);
+	// Valid 신호 생성 (조합 로직으로만)
+	assign valid_in_comb = (state == PROCESSING) && (cnt_x >= 2) && (cnt_y >= 2);
 	
+	// Valid 파이프라인 (순차 로직)
 	always_ff @(posedge clk or negedge rst) begin 
         if (!rst) begin  
             valid_d1 <= 1'b0;
@@ -127,7 +136,7 @@ module conv_engine_2d(
             valid_d4 <= 1'b0;
 			valid_d5 <= 1'b0;
         end else begin
-            valid_d1 <= valid_in;
+            valid_d1 <= valid_in_comb;  // 조합 신호 사용
             valid_d2 <= valid_d1;
             valid_d3 <= valid_d2;
 			valid_d4 <= valid_d3;
@@ -135,7 +144,24 @@ module conv_engine_2d(
         end
     end
 	
+	// 출력 할당
 	assign result_valid = valid_d5;
 	assign result_out = final_result;
 	assign done_signal = (state == DONE);
+	
+	// 디버그 출력
+	always @(posedge clk) begin
+		if (state != next_state) begin
+			case(next_state)
+				IDLE: $display("[CONV] 상태: IDLE");
+				PROCESSING: $display("[CONV] 상태: PROCESSING");
+				DONE: $display("[CONV] 상태: DONE");
+			endcase
+		end
+		
+		if (result_valid) begin
+			$display("[CONV] 결과: %h (x=%d, y=%d)", result_out, cnt_x, cnt_y);
+		end
+	end
+	
 endmodule
