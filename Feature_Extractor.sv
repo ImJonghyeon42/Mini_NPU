@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module Feature_Extractor(
+module Feature_Extractor_Fixed(
 	input logic clk,
 	input logic rst,
 	input logic start_signal,
@@ -16,13 +16,13 @@ module Feature_Extractor(
 	logic Activation_valid;
 	logic signed [21:0] Activation_result;
 	
-	// ===== BRAM으로 강제 변환하여 LUT 절약 =====
-	(* ram_style = "block" *) logic signed [15:0] conv_buffer [0:899];  // 30x30을 1D로
-	logic [9:0] buffer_addr;  // 900개 주소
+	// ===== 22비트로 데이터 보존 (BRAM 사용) =====
+	(* ram_style = "block" *) logic signed [21:0] conv_buffer [0:899];  // 16→22비트로 수정
+	logic [9:0] buffer_addr;
 	logic buffer_write_en;
 	logic buffer_complete;
 	
-	// Max Pooling 입력 제어 (단순화)
+	// Max Pooling 입력 제어
 	logic max_pool_start;
 	logic conv_done_d1;
 	logic [9:0] read_addr;
@@ -43,7 +43,7 @@ module Feature_Extractor(
 		.result_valid(Activation_valid), .result_out(Activation_result)
 	);
 	
-	// ===== 단순화된 버퍼 관리 =====
+	// ===== 개선된 버퍼 관리 (데이터 손실 방지) =====
 	assign buffer_write_en = Activation_valid;
 	
 	always_ff @(posedge clk or negedge rst) begin
@@ -51,11 +51,13 @@ module Feature_Extractor(
 			buffer_addr <= 10'b0;
 			buffer_complete <= 1'b0;
 		end else if (buffer_write_en) begin
-			conv_buffer[buffer_addr] <= Activation_result[15:0];  // 16비트로 저장
+			// ✅ 수정: 22비트 전체 저장 (데이터 손실 없음)
+			conv_buffer[buffer_addr] <= Activation_result;  // 전체 22비트 보존
 			
 			if (buffer_addr == 899) begin  // 30x30 = 900
 				buffer_addr <= 10'b0;
 				buffer_complete <= 1'b1;
+				$display("Feature Buffer 완료: 900개 픽셀 저장됨");
 			end else begin
 				buffer_addr <= buffer_addr + 1;
 			end
@@ -64,7 +66,7 @@ module Feature_Extractor(
 		end
 	end
 	
-	// Conv 완료 감지 (단순화)
+	// Conv 완료 감지
 	always_ff @(posedge clk or negedge rst) begin
 		if (!rst) begin
 			conv_done_d1 <= 1'b0;
@@ -75,7 +77,7 @@ module Feature_Extractor(
 	
 	assign max_pool_start = buffer_complete && !conv_done_d1;
 	
-	// ===== 단순화된 버퍼 읽기 =====
+	// ===== 개선된 버퍼 읽기 =====
 	always_ff @(posedge clk or negedge rst) begin
 		if (!rst) begin
 			read_addr <= 10'b0;
@@ -85,19 +87,21 @@ module Feature_Extractor(
 			reading_buffer <= 1'b1;
 			read_addr <= 10'b0;
 			read_valid <= 1'b1;
+			$display("Max Pooling 시작: 900개 픽셀 처리");
 		end else if (reading_buffer) begin
 			if (read_addr == 899) begin
 				read_addr <= 10'b0;
 				reading_buffer <= 1'b0;
 				read_valid <= 1'b0;
+				$display("버퍼 읽기 완료");
 			end else begin
 				read_addr <= read_addr + 1;
 			end
 		end
 	end
 	
-	// 16비트 → 22비트 부호 확장
-	assign buffered_data = {{6{conv_buffer[read_addr][15]}}, conv_buffer[read_addr]};
+	// ✅ 수정: 22비트 데이터 그대로 사용 (부호 확장 불필요)
+	assign buffered_data = conv_buffer[read_addr];
 	
 	Max_Pooling #( .IMG_WIDTH(30), .IMG_HEIGHT(30))
 	U2 (
