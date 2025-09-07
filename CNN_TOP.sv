@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 module CNN_TOP(
     input logic clk,
-    input logic rst,  // Active Low
+    input logic rst,  
     input logic start_signal,
     input logic pixel_valid,
     input logic [7:0] pixel_in,
@@ -10,7 +10,7 @@ module CNN_TOP(
     output logic cnn_busy
 );
 
-    // ===== 내부 신호들 (최소화) =====
+    // ===== 내부 신호들  =====
     logic signed [21:0] feature_result;
     logic feature_valid;
     logic feature_done;
@@ -22,24 +22,19 @@ module CNN_TOP(
     logic fc_result_valid;
     logic signed [47:0] fc_result_data;
     
-    // ===== 단순화된 상태 머신 (5→3 상태로 축소) =====
+    // ===== 단순화된 상태 머신 =====
     enum logic [1:0] {
         ST_IDLE       = 2'b00,
         ST_PROCESSING = 2'b01,
         ST_DONE       = 2'b10
     } current_state, next_state;
     
-    // ===== 카운터 대신 간단한 타이머만 사용 =====
-    logic [15:0] simple_timer;  // 32비트→16비트로 축소
-    
-    // ===== 결과 래치 =====
+    logic [15:0] simple_timer;
     logic signed [47:0] final_result_reg;
     logic final_result_valid_reg;
-    
-    // Feature Extractor 제어
     logic feature_start;
 
-    // ===== Feature Extractor =====
+    // ===== Feature Extractor  =====
     Feature_Extractor u_feature_extractor(
         .clk(clk), 
         .rst(rst),
@@ -71,7 +66,7 @@ module CNN_TOP(
         .o_result_data(fc_result_data)
     );
     
-    // ===== 단순화된 상태 전환 로직 =====
+    // ===== 상태 전환 로직 =====
     always_comb begin
         next_state = current_state;
         case(current_state)
@@ -81,20 +76,18 @@ module CNN_TOP(
             end
             
             ST_PROCESSING: begin
-                // FC 결과가 나오거나 타임아웃 시 완료
                 if(fc_result_valid || simple_timer > 50000)
                     next_state = ST_DONE;
             end
             
             ST_DONE: begin
-                // 짧은 대기 후 IDLE로
                 if(simple_timer > 1000)
                     next_state = ST_IDLE;
             end
         endcase
     end
     
-    // ===== 상태 레지스터 및 간단한 타이머 =====
+    // ===== 상태 레지스터 =====
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
             current_state <= ST_IDLE;
@@ -104,32 +97,28 @@ module CNN_TOP(
         end else begin
             current_state <= next_state;
             
-            // 상태 타이머 (단순화)
             if (current_state != next_state) begin
                 simple_timer <= 16'h0;
             end else begin
                 simple_timer <= simple_timer + 1;
             end
             
-            // 새 시작시 초기화
             if (current_state == ST_IDLE && next_state == ST_PROCESSING) begin
                 final_result_valid_reg <= 1'b0;
             end
             
-            // FC 결과 래치 (단순화)
             if (fc_result_valid && current_state == ST_PROCESSING) begin
                 final_result_reg <= fc_result_data;
                 final_result_valid_reg <= 1'b1;
             end
             
-            // IDLE로 돌아가면 valid 해제
             if (current_state == ST_DONE && next_state == ST_IDLE) begin
                 final_result_valid_reg <= 1'b0;
             end
         end
     end
     
-    // ===== FC 시작 펄스 생성 (단순화) =====
+    // ===== FC 시작 펄스 생성  =====
     logic fc_start_d1;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -141,7 +130,7 @@ module CNN_TOP(
     
     assign fc_start_pulse = flattened_buffer_full && !fc_start_d1;
     
-    // ===== 제어 신호 생성 (단순화) =====
+    // ===== 제어 신호 생성  =====
     logic feature_start_d1;
     always_ff @(posedge clk or negedge rst) begin
         if (!rst) begin
@@ -152,7 +141,7 @@ module CNN_TOP(
     end
     assign feature_start = (current_state == ST_PROCESSING) && !feature_start_d1;
     
-    // ===== 출력 신호 (단순화) =====
+    // ===== 출력 신호 =====
     assign cnn_busy = (current_state != ST_IDLE);
     assign final_result_valid = final_result_valid_reg;
     assign final_lane_result = final_result_reg;

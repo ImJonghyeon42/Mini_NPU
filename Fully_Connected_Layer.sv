@@ -8,8 +8,8 @@ module Fully_Connected_Layer(
 	output logic signed [47:0] o_result_data
 );
 
-	// ===== LUT 최적화: 22비트 → 12비트 가중치 =====
-	logic signed [11:0] weight_ROM [0 : 224];  // 22→12비트로 대폭 축소
+	// ===== 가중치 ROM (22비트 signed, weight.mem 파일에서 읽기) =====
+	logic signed [21:0] weight_ROM [0 : 224];
 	
 	// ===== 상태 정의 (단순화) =====
 	enum logic [1:0] {
@@ -31,8 +31,8 @@ module Fully_Connected_Layer(
 		.clk(clk), 
 		.rst(rst), 
 		.i_valid(mac_valid),
-		.data_in_a({10'b0, i_flattened_data[mac_cnt][11:0]}),  // 12비트만 사용
-		.data_in_b({10'b0, weight_ROM[mac_cnt]}),              // 12비트 가중치
+		.data_in_a(i_flattened_data[mac_cnt]),
+		.data_in_b(weight_ROM[mac_cnt]),
 		.sum_in(mac_sum_in),
 		.o_valid(mac_sum_out_valid),
 		.sum_out(mac_sum_out)
@@ -103,22 +103,16 @@ module Fully_Connected_Layer(
 	assign mac_sum_in = accumulator_reg;
 	assign o_result_data = accumulator_reg;
 	
-	// ===== 12비트 가중치 초기화 (기존 22비트에서 변환) =====
+	// ===== weight.mem 파일에서 가중치 초기화 =====
 	initial begin
-		// 기존 22비트 가중치를 12비트로 스케일링
-		weight_ROM[0] = 12'h7E4;   // 0x3FFE46 >> 10
-		weight_ROM[1] = 12'h7EC;   // 0x3FFB24 >> 10
-		weight_ROM[2] = 12'h7F6;   // 0x3FFDB8 >> 10
-		weight_ROM[3] = 12'h7ED;   // 0x3FFB7F >> 10
-		weight_ROM[4] = 12'h000;   // 0x000136 >> 10
-		weight_ROM[5] = 12'h002;   // 0x000964 >> 10
-		// ... 나머지 가중치들도 동일하게 12비트로 변환
-		// (전체 225개 가중치를 12비트로 축소)
+		$readmemh("weight.mem", weight_ROM);
+		$display("가중치 파일 로드 완료: weight.mem");
 		
-		// 간단한 패턴으로 나머지 초기화 (테스트용)
-		for(int i = 6; i < 225; i++) begin
-			weight_ROM[i] = 12'h001;  // 작은 양수값
-		end
+		// 처음 몇 개 가중치 확인 (디버깅용)
+		$display("Weight[0] = 0x%06X", weight_ROM[0]);
+		$display("Weight[1] = 0x%06X", weight_ROM[1]);
+		$display("Weight[2] = 0x%06X", weight_ROM[2]);
+		$display("Weight[224] = 0x%06X", weight_ROM[224]);
 	end
 	
 endmodule
